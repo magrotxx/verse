@@ -4,6 +4,9 @@ import AppKit
 enum VerseMain {
     @MainActor
     static func main() {
+        #if DEBUG
+        VerseChecks.runIfRequested() // exits here when launched with --checks
+        #endif
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate // NSApplication.delegate is unowned(unsafe);
