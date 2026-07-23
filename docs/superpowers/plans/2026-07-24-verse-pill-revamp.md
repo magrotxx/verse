@@ -12,7 +12,7 @@
 
 - macOS 14+, Swift 5.9, no external packages.
 - Build/run loop: `swift build 2>&1 | tail -5` for compile checks; full verify = `pkill -x Verse; ./build.sh install && open /Applications/Verse.app && sleep 2 && pgrep -x Verse`.
-- Tests: `swift test 2>&1 | tail -12` must pass before every commit.
+- **Tests (AMENDED 2026-07-24):** this machine has Command Line Tools only — no XCTest, no swift-testing. There is NO test target. Tests live as debug-only assertion checks inside the app target: `Sources/Verse/Checks/Checks.swift` defines (all inside `#if DEBUG`) a tiny harness — `func check(_ name: String, _ body: () -> Bool)` printing `PASS name` / `FAIL name` and tracking failures, plus `enum VerseChecks { static func runIfRequested() }` which, when `CommandLine.arguments.contains("--checks")`, runs every registered checks file and `exit(0/1)`. `runIfRequested()` is the FIRST statement of the app entry point. Each task's planned `Tests/VerseTests/XTests.swift` file becomes `Sources/Verse/Checks/XChecks.swift` with the same assertions expressed via `check(...)`. The test loop everywhere in this plan is: `swift run Verse --checks 2>&1 | tail -12` (expect `ALL CHECKS PASSED`, exit 0). RED/GREEN TDD evidence uses that command. Package.swift keeps ONLY the executable target (no testTarget).
 - Zero compiler warnings in changed files.
 - PRESERVE the user's renderer fixes from commit 42ada0a (wipe `mapped` gradient, `activeWordIndex` in-window guard, tracer `opacity(p > 0)`).
 - Complex SwiftUI expressions can hit type-checker timeouts — hoist math into typed helper funcs (precedent: `BreathingDots` in VibeModeView.swift).

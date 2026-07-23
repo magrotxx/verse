@@ -93,7 +93,10 @@ struct RootNotchView: View {
     private var shell: some View {
         ZStack(alignment: .top) {
             shape
-                .fill(isExpanded ? model.palette.background : Color.black)
+                // Pure black in both states: the expanded panel reads as "the
+                // notch itself grew", not a tinted card. Album palette drives
+                // CONTENT tints only (current line, neighbors, scrubber, buttons).
+                .fill(Color.black)
                 .shadow(color: .black.opacity(isExpanded ? 0.45 : 0), radius: 18, y: 6)
 
             // Content is clipped to the animating shape so vibe mode is
