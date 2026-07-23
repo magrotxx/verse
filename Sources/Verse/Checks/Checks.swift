@@ -23,7 +23,8 @@ enum VerseChecks {
     private static let suites: [() -> Void] = [
         runTitleCleanerChecks,
         runEchoDetectionChecks,
-        runPlaybackClockChecks
+        runPlaybackClockChecks,
+        runFittedFontChecks
     ]
 
     /// When launched with `--checks`, runs every registered suite and exits
