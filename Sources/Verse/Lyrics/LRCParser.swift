@@ -11,13 +11,19 @@ enum LRCParser {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
 
-            // Collect all leading [..] tags; skip metadata tags like [ar:...]
+            // Collect all leading [..] tags; skip metadata tags like [ar:...].
+            // Only consume a bracket group when it actually parses as a
+            // timestamp — a group that doesn't (e.g. a literal "[background
+            // hum]" echo line right after a timestamp tag) is left in `rest`
+            // so it survives into the line's text instead of being silently
+            // discarded like a metadata tag.
             var rest = Substring(trimmed)
             var timestamps: [TimeInterval] = []
             while rest.hasPrefix("["), let close = rest.firstIndex(of: "]") {
                 let tag = String(rest[rest.index(after: rest.startIndex)..<close])
+                guard let t = parseTimestamp(tag) else { break }
                 rest = rest[rest.index(after: close)...]
-                if let t = parseTimestamp(tag) { timestamps.append(t) }
+                timestamps.append(t)
             }
             guard !timestamps.isEmpty else { continue }
 
@@ -43,9 +49,24 @@ enum LRCParser {
             } else {
                 words = LyricsTimeline.synthesizeWords(text: r.text, start: r.start, end: min(end, r.start + 8))
             }
-            lines.append(LyricLine(id: i, start: r.start, end: end, text: r.text, words: words))
+            lines.append(LyricLine(id: i, start: r.start, end: end, text: r.text, words: words, isEcho: isWholeLineEcho(r.text)))
         }
         return LyricsTimeline(lines: lines)
+    }
+
+    /// v1 rule: the trimmed line is a whole-line echo when it starts and
+    /// ends with a matching bracket pair and contains no other closing
+    /// bracket of that kind before the final character — so "(a) (b)"
+    /// (two separate groups) is NOT whole-line echo.
+    private static func isWholeLineEcho(_ text: String) -> Bool {
+        guard !text.isEmpty else { return false }
+        if text.hasPrefix("("), text.hasSuffix(")") {
+            return text.dropLast().filter { $0 == ")" }.isEmpty
+        }
+        if text.hasPrefix("["), text.hasSuffix("]") {
+            return text.dropLast().filter { $0 == "]" }.isEmpty
+        }
+        return false
     }
 
     /// "mm:ss.xx" (or mm:ss / mm:ss.xxx) → seconds
@@ -76,15 +97,25 @@ enum LRCParser {
         }
         guard stamped.count >= 2 else { return nil }
 
+        // Split each stamped segment into words, then run the shared
+        // bracket-depth tracker across the flattened, in-order token stream
+        // so a bracketed span that crosses a tag boundary — e.g.
+        // "<t1>(ooh <t2>la <t3>la)" — still tracks depth correctly instead
+        // of resetting at each `<mm:ss>` tag.
+        let segments = stamped.map { $0.text.split(separator: " ").map(String.init) }
+        let echoFlags = LyricsTimeline.markEcho(segments.flatMap { $0 })
+
         var words: [WordTiming] = []
+        var flagIndex = 0
         for (i, item) in stamped.enumerated() {
             let end = i + 1 < stamped.count ? stamped[i + 1].start : item.start + 1.0
             // A stamped segment may contain several words; split them evenly.
-            let subwords = item.text.split(separator: " ").map(String.init)
+            let subwords = segments[i]
             let span = (end - item.start) / Double(max(subwords.count, 1))
             for (j, w) in subwords.enumerated() {
                 let s = item.start + span * Double(j)
-                words.append(WordTiming(text: w, start: s, end: s + span))
+                words.append(WordTiming(text: w, start: s, end: s + span, isEcho: echoFlags[flagIndex]))
+                flagIndex += 1
             }
         }
         return words

@@ -4,6 +4,9 @@ struct WordTiming: Equatable {
     let text: String
     let start: TimeInterval
     let end: TimeInterval
+    /// True when this word falls inside a bracketed span, e.g. the "(ooh)"
+    /// in "run away (ooh) tonight" — an inline ad-lib/background echo.
+    var isEcho: Bool = false
 }
 
 struct LyricLine: Equatable, Identifiable {
@@ -16,6 +19,9 @@ struct LyricLine: Equatable, Identifiable {
     /// weighted by word length — always present for non-empty lines,
     /// so no theme is ever disabled by missing word data.
     var words: [WordTiming]
+    /// True when the trimmed line text is entirely wrapped by `(…)` or
+    /// `[…]` — a whole-line echo/ad-lib, e.g. "(ooh, la la)".
+    var isEcho: Bool = false
 
     var isEmpty: Bool { text.trimmingCharacters(in: .whitespaces).isEmpty }
 }
@@ -78,13 +84,33 @@ struct LyricsTimeline {
         // Weight = character count + 1 so tiny words still get a beat.
         let weights = tokens.map { Double($0.count + 1) }
         let total = weights.reduce(0, +)
+        let echoFlags = markEcho(tokens)
         var cursor = start
         var result: [WordTiming] = []
-        for (word, weight) in zip(tokens, weights) {
-            let span = duration * (weight / total)
-            result.append(WordTiming(text: word, start: cursor, end: cursor + span))
+        for i in tokens.indices {
+            let span = duration * (weights[i] / total)
+            result.append(WordTiming(text: tokens[i], start: cursor, end: cursor + span, isEcho: echoFlags[i]))
             cursor += span
         }
         return result
+    }
+
+    // MARK: - Echo detection
+
+    /// Bracket-depth tracker shared by `synthesizeWords` and `LRCParser`'s
+    /// enhanced word-level path. A token beginning with `(`/`[` raises depth
+    /// before flagging (the opening token itself is inside the span); a
+    /// token ending with `)`/`]` lowers depth after (the closing token is
+    /// still flagged). A token is echo when depth > 0 at its position.
+    static func markEcho(_ tokens: [String]) -> [Bool] {
+        var depth = 0
+        var flags: [Bool] = []
+        flags.reserveCapacity(tokens.count)
+        for token in tokens {
+            if token.hasPrefix("(") || token.hasPrefix("[") { depth += 1 }
+            flags.append(depth > 0)
+            if token.hasSuffix(")") || token.hasSuffix("]") { depth = max(0, depth - 1) }
+        }
+        return flags
     }
 }
