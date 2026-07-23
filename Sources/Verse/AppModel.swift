@@ -175,6 +175,11 @@ final class AppModel: ObservableObject {
         coordinator.seek(to: min(max(seconds, 0), duration))
     }
 
+    /// Re-anchor the playback clock against ground truth right now, instead
+    /// of waiting for the next scheduled poll. Intended to be called when
+    /// the popup opens.
+    func resyncNow() { coordinator.resyncNow() }
+
     func openSourcePlayer() {
         guard let id = now?.bundleIdentifier,
               let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)

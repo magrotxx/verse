@@ -56,6 +56,20 @@ final class PlaybackClock: @unchecked Sendable {
         baseUptime = ProcessInfo.processInfo.systemUptime
     }
 
+    /// Re-anchors the clock to ground truth (e.g. an `osascript` position
+    /// poll) when local interpolation has drifted beyond `tolerance`.
+    /// No-ops (and returns false) for small drift so a lyric mid-transition
+    /// doesn't visibly jump on every routine correction. Returns true iff a
+    /// correction was applied.
+    @discardableResult
+    func correct(to elapsed: TimeInterval, tolerance: TimeInterval = 0.3) -> Bool {
+        guard abs(position() - elapsed) > tolerance else { return false }
+        lock.lock(); defer { lock.unlock() }
+        baseElapsed = elapsed
+        baseUptime = ProcessInfo.processInfo.systemUptime
+        return true
+    }
+
     func position() -> TimeInterval {
         lock.lock(); defer { lock.unlock() }
         let now = ProcessInfo.processInfo.systemUptime
