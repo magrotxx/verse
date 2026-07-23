@@ -66,7 +66,7 @@ final class LyricsService {
     /// gets and searches over title variants, and retry the whole sequence
     /// with backoff before giving up.
     private func fetchRecord(for state: NowPlayingState) async -> LRCLibRecord? {
-        let titles = Self.titleVariants(state.title)
+        let titles = TitleCleaner.variants(state.title)
         for attempt in 0..<3 {
             if attempt > 0 {
                 try? await Task.sleep(nanoseconds: attempt == 1 ? 2_000_000_000 : 5_000_000_000)
@@ -112,21 +112,6 @@ final class LyricsService {
         return pool.min { a, b in
             abs((a.duration ?? 0) - state.duration) < abs((b.duration ?? 0) - state.duration)
         }
-    }
-
-    /// [original title, title stripped of "(feat. X)" / "- Remastered" noise].
-    static func titleVariants(_ title: String) -> [String] {
-        var cleaned = title
-        cleaned = cleaned.replacingOccurrences(
-            of: #"\s*[\(\[]\s*(feat\.?|ft\.?|featuring|with)\s[^\)\]]*[\)\]]"#,
-            with: "", options: [.regularExpression, .caseInsensitive]
-        )
-        cleaned = cleaned.replacingOccurrences(
-            of: #"\s+-\s+(feat\.?|ft\.?|featuring|remaster|single version|radio edit|bonus track|deluxe|mono|stereo|live).*$"#,
-            with: "", options: [.regularExpression, .caseInsensitive]
-        )
-        cleaned = cleaned.trimmingCharacters(in: .whitespaces)
-        return cleaned.isEmpty || cleaned == title ? [title] : [title, cleaned]
     }
 
     private func getJSON<T: Decodable>(_ type: T.Type, from url: URL?) async -> T? {
