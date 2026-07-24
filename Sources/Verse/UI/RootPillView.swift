@@ -88,6 +88,9 @@ struct RootPillView: View {
         .scaleEffect(bounceScale)
         .contentShape(Rectangle())
         .contextMenu { PillContextMenu(model: model) }
+        // In popup state the shell's own taps are OFF (`.subviews`) so the
+        // card's buttons/scrubber receive every click; in pill state the
+        // shell claims taps for expand / double-click play-pause.
         .gesture(
             ExclusiveGesture(
                 TapGesture(count: 2).onEnded {
@@ -96,7 +99,8 @@ struct RootPillView: View {
                     triggerBounce()
                 },
                 TapGesture(count: 1).onEnded { expand() }
-            )
+            ),
+            including: isPopup ? .subviews : .all
         )
         .offset(x: frame.minX, y: frame.minY)
         .animation(model.isDraggingPill ? nil : Motion.spring(0.45, 0.92), value: model.pillAnchor)
