@@ -38,10 +38,6 @@ struct SettingsView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 10) {
-                Toggle("Wait a beat before expanding (hover intent)", isOn: $model.hoverIntentDelay)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-
                 HStack {
                     Text("During instrumentals")
                     Spacer()
@@ -86,7 +82,7 @@ struct SettingsView: View {
 
             Spacer(minLength: 0)
 
-            Text("Verse — lyrics in your notch")
+            Text("Verse — lyrics in a pill")
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .center)

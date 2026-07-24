@@ -65,9 +65,10 @@ enum PillDisplay: Equatable {
 /// tinted by the album palette.
 ///
 /// Per-frame content swaps are driven by playback time `t` and faded with
-/// `chunkFade` — never SwiftUI `.transition`s, which strand mid-animation inside
-/// a `TimelineView` (see `CompactWingView.chunkView`'s note). `wall` is a live
-/// wall-clock feed used for the paused breathing pulse, which must keep moving
+/// `chunkFade` — never SwiftUI `.transition`s: an `.id`/`.transition` swap
+/// strands outgoing views mid-transition inside a `TimelineView`'s per-frame
+/// re-renders, whereas an opacity derived from `t` is glitch-proof. `wall` is a
+/// live wall-clock feed for the paused breathing pulse, which must keep moving
 /// even though `t` is frozen while paused.
 struct PillView: View {
     @ObservedObject var model: AppModel
@@ -176,7 +177,7 @@ struct PillView: View {
         BreathingDots(color: model.palette.bright, t: wall)
     }
 
-    // MARK: - Time-driven crossfade (same shape as CompactWingView.pairFade)
+    // MARK: - Time-driven crossfade
 
     /// 0→1 over the chunk's first 0.25s, 1→0 over its last 0.25s — adjacent
     /// chunks read as a soft swap; the line's last chunk fades into the gap.

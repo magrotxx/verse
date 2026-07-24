@@ -1,8 +1,7 @@
 import AppKit
 
-/// Nearly invisible menu bar item — the notch UI is the product.
-/// Exists only for Settings / Quit, and to measure where the status item
-/// region begins (used to cap the wing width at launch).
+/// Nearly invisible menu bar item — the floating pill is the product.
+/// Exists only for Settings / Quit.
 @MainActor
 final class StatusItemController: NSObject {
     private let statusItem: NSStatusItem
@@ -35,12 +34,6 @@ final class StatusItemController: NSObject {
         statusItem.menu = menu
 
         model.openSettings = { [weak self] in self?.settings.show() }
-    }
-
-    /// Screen X where the status-item region begins (this item's left edge).
-    /// Measured at launch to cap the wing width.
-    func buttonScreenMinX() -> CGFloat? {
-        statusItem.button?.window?.frame.minX
     }
 
     @objc private func openSettings() {

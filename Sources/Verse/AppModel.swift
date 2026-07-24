@@ -55,9 +55,6 @@ final class AppModel: ObservableObject {
     @Published var theme: LyricTheme {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: "verse.theme") }
     }
-    @Published var hoverIntentDelay: Bool {  // 150ms hover-intent before expanding
-        didSet { UserDefaults.standard.set(hoverIntentDelay, forKey: "verse.hoverIntent") }
-    }
     @Published var instrumentalStyle: InstrumentalStyle {
         didSet { UserDefaults.standard.set(instrumentalStyle.rawValue, forKey: "verse.instrumental") }
     }
@@ -124,7 +121,6 @@ final class AppModel: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
         theme = LyricTheme(rawValue: defaults.string(forKey: "verse.theme") ?? "") ?? .lightWipe
-        hoverIntentDelay = defaults.object(forKey: "verse.hoverIntent") as? Bool ?? true
         instrumentalStyle = InstrumentalStyle(
             rawValue: defaults.string(forKey: "verse.instrumental") ?? "") ?? .breathingDots
         syncOffset = defaults.double(forKey: "verse.syncOffset")
