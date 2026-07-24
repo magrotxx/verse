@@ -107,9 +107,14 @@ struct LyricsTimeline {
         var flags: [Bool] = []
         flags.reserveCapacity(tokens.count)
         for token in tokens {
-            if token.hasPrefix("(") || token.hasPrefix("[") { depth += 1 }
-            flags.append(depth > 0)
-            if token.hasSuffix(")") || token.hasSuffix("]") { depth = max(0, depth - 1) }
+            // Count occurrences instead of prefix/suffix so trailing
+            // punctuation can't defeat a close — "day...)," must lower depth
+            // (the old suffix check missed it and flagged the whole rest of
+            // the line as background vocal).
+            let opens = token.filter { $0 == "(" || $0 == "[" }.count
+            let closes = token.filter { $0 == ")" || $0 == "]" }.count
+            flags.append(depth > 0 || opens > 0)
+            depth = max(0, depth + opens - closes)
         }
         return flags
     }

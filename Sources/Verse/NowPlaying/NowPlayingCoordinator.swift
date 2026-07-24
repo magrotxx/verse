@@ -7,13 +7,58 @@ final class NowPlayingCoordinator {
     private let clock: PlaybackClock
     private let poller = PositionPoller()
 
-    /// v1: only dedicated music apps drive the notch. System now-playing can't
-    /// distinguish a music site from any other tab, so browser audio
-    /// (YouTube, video calls, …) is ignored entirely.
-    private static let allowedSources: Set<String> = [
+    /// Native music apps that drive the pill (each reports its own bundle ID
+    /// through MediaRemote).
+    static let musicApps: Set<String> = [
+        "com.spotify.client",
+        "com.apple.Music",
+        "com.github.th-ch.youtube-music",   // YouTube Music desktop
+        "com.tidal.desktop",
+        "com.deezer.deezer-desktop",
+        "com.amazon.music",
+        "tv.plex.plexamp",
+        "com.coppertino.Vox",
+        "com.swinsian.Swinsian",
+    ]
+
+    /// Browsers whose tabs may host a WEB music player (YT Music, etc.).
+    static let browsers: Set<String> = [
+        "com.apple.Safari",
+        "com.apple.SafariTechnologyPreview",
+        "com.google.Chrome",
+        "org.mozilla.firefox",
+        "company.thebrowser.Browser",       // Arc
+        "com.brave.Browser",
+        "com.microsoft.edgemac",
+        "com.operasoftware.Opera",
+        "com.vivaldi.Vivaldi",
+    ]
+
+    /// Position re-anchor polling works only for AppleScript-able players.
+    static let scriptableSources: Set<String> = [
         "com.spotify.client",
         "com.apple.Music",
     ]
+
+    /// Pure allowlist rule (checkable): native music apps always pass; a
+    /// browser passes only when web players are enabled AND the metadata
+    /// looks like real music — web players (YT Music web…) publish artist AND
+    /// album via MediaSession, plain videos/tabs don't. Everything else
+    /// (video apps, calls) is ignored.
+    static func isAllowed(_ state: NowPlayingState, webPlayersEnabled: Bool) -> Bool {
+        if musicApps.contains(state.bundleIdentifier) { return true }
+        if browsers.contains(state.bundleIdentifier) {
+            return webPlayersEnabled && !state.artist.isEmpty && !state.album.isEmpty
+        }
+        return false
+    }
+
+    private static func isAllowed(_ state: NowPlayingState) -> Bool {
+        isAllowed(
+            state,
+            webPlayersEnabled: UserDefaults.standard.object(forKey: "verse.webPlayers") as? Bool ?? true
+        )
+    }
 
     /// bundleID + playing flag from the last *filtered* (allowed-source)
     /// state — this is what the poller is allowed to target. Written from
@@ -48,7 +93,7 @@ final class NowPlayingCoordinator {
             chosen.onUpdate = { [weak self] rawState, elapsed, rate in
                 guard let self else { return }
                 let state = rawState.flatMap {
-                    Self.allowedSources.contains($0.bundleIdentifier) ? $0 : nil
+                    Self.isAllowed($0) ? $0 : nil
                 }
                 let playing = state?.isPlaying ?? false
                 // Pause diffs sometimes arrive without elapsedTime, which reaches
@@ -66,7 +111,11 @@ final class NowPlayingCoordinator {
                     duration: state?.duration ?? 0
                 )
                 self.updateLastState(bundleID: state?.bundleIdentifier, isPlaying: playing)
-                if let bundleID = state?.bundleIdentifier, playing {
+                // Re-anchor polling only for AppleScript-able players; the
+                // rest (YT Music, TIDAL, web players…) ride the adapter's
+                // event timestamps.
+                if let bundleID = state?.bundleIdentifier, playing,
+                   Self.scriptableSources.contains(bundleID) {
                     self.poller.start(bundleID: bundleID)
                 } else {
                     self.poller.stop()
@@ -98,7 +147,8 @@ final class NowPlayingCoordinator {
     /// queries (and so never risks launching) an app we don't already know
     /// is running and playing.
     func resyncNow() {
-        guard let bundleID = lastPlayingBundleID() else { return }
+        guard let bundleID = lastPlayingBundleID(),
+              Self.scriptableSources.contains(bundleID) else { return }
         poller.pollOnce(bundleID: bundleID)
     }
 

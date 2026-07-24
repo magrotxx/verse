@@ -139,9 +139,11 @@ struct LyricLineRenderer: View {
         let active = activeWordIndex
         return wordHStack { i, word in
             Text(word.text)
-                .font(style.font)
-                // The one lit word carries the brand accent.
+                .font(word.isEcho ? style.font.italic() : style.font)
+                // The one lit word carries the brand accent; ad-lib words sit
+                // subordinate even when lit.
                 .foregroundStyle(i == active ? style.accent : style.dim)
+                .opacity(word.isEcho ? 0.8 : 1)
                 .scaleEffect(i == active ? 1.06 : 1.0)
                 .animation(.spring(response: 0.22, dampingFraction: 0.7), value: active == i)
         }
@@ -157,11 +159,11 @@ struct LyricLineRenderer: View {
         return wordHStack { i, word in
             let revealed = t >= word.start
             Text(word.text)
-                .font(style.font)
+                .font(word.isEcho ? style.font.italic() : style.font)
                 // The word being sung lands in the brand accent, settling to
-                // bright once its moment passes.
+                // bright once its moment passes; ad-lib words stay subordinate.
                 .foregroundStyle(i == active ? style.accent : style.bright)
-                .opacity(revealed ? 1 : 0)
+                .opacity(revealed ? (word.isEcho ? 0.75 : 1) : 0)
                 .offset(y: revealed ? 0 : 5)
                 .animation(.easeOut(duration: 0.28), value: revealed)
                 .animation(.easeOut(duration: 0.35), value: active == i)
@@ -192,10 +194,24 @@ struct LyricLineRenderer: View {
     // MARK: - Helpers
 
     private var lineText: some View {
-        Text(text)
+        styledLineText
             .font(style.font)
             .lineLimit(1)
             .truncationMode(.tail)
+    }
+
+    /// One Text with inline ad-lib runs italicized (merged background vocals,
+    /// "lyric (aaah ooh)"). Run-level italics survive the wipe's outer
+    /// foregroundStyle/mask — never set run-level colors here, they would
+    /// punch holes in the wipe gradient.
+    private var styledLineText: Text {
+        guard words.contains(where: { $0.isEcho }) else { return Text(text) }
+        var result = Text(verbatim: "")
+        for (i, w) in words.enumerated() {
+            let piece = Text(verbatim: (i == 0 ? "" : " ") + w.text)
+            result = result + (w.isEcho ? piece.font(style.font.italic()) : piece)
+        }
+        return result
     }
 
     private func wordHStack<W: View>(

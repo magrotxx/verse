@@ -51,7 +51,40 @@ enum LRCParser {
             }
             lines.append(LyricLine(id: i, start: r.start, end: end, text: r.text, words: words, isEcho: isWholeLineEcho(r.text)))
         }
-        return LyricsTimeline(lines: lines)
+        return LyricsTimeline(lines: mergeEchoLines(lines))
+    }
+
+    /// Apple Music-style background vocals (user decision 2026-07-25): a
+    /// whole-line echo that closely follows a main line merges INTO it — one
+    /// line reading "lyric (aaah ooh)", the ad-lib's words still flagged so
+    /// renderers subordinate them (italic). Echoes with no recent main line
+    /// (e.g. an intro "(oooh)") stay standalone and keep the echo treatment.
+    static func mergeEchoLines(_ lines: [LyricLine]) -> [LyricLine] {
+        var merged: [LyricLine] = []
+        for line in lines {
+            if line.isEcho,
+               let lastIdx = merged.indices.last,
+               !merged[lastIdx].isEcho,
+               !merged[lastIdx].isEmpty,
+               line.start - merged[lastIdx].start <= 10 {
+                let main = merged[lastIdx]
+                merged[lastIdx] = LyricLine(
+                    id: main.id,
+                    start: main.start,
+                    end: max(main.end, line.end),
+                    text: main.text + " " + line.text,
+                    words: main.words + line.words,
+                    isEcho: false
+                )
+            } else {
+                merged.append(line)
+            }
+        }
+        // Line ids must equal array indices — timeline lookups and the browse
+        // list rely on it.
+        return merged.enumerated().map { i, l in
+            LyricLine(id: i, start: l.start, end: l.end, text: l.text, words: l.words, isEcho: l.isEcho)
+        }
     }
 
     /// v1 rule: the trimmed line is a whole-line echo when it starts and

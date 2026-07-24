@@ -19,7 +19,15 @@ struct NowPlayingState: Equatable {
         switch bundleIdentifier {
         case "com.spotify.client": return "Spotify"
         case "com.apple.Music": return "Music"
+        case "com.github.th-ch.youtube-music": return "YouTube Music"
+        case "com.tidal.desktop": return "TIDAL"
+        case "com.deezer.deezer-desktop": return "Deezer"
+        case "com.amazon.music": return "Amazon Music"
+        case "tv.plex.plexamp": return "Plexamp"
+        case "com.coppertino.Vox": return "VOX"
+        case "com.swinsian.Swinsian": return "Swinsian"
         default:
+            if NowPlayingCoordinator.browsers.contains(bundleIdentifier) { return "Web" }
             return bundleIdentifier.split(separator: ".").last.map(String.init)?.capitalized ?? "Player"
         }
     }

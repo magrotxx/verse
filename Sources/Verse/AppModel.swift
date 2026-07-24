@@ -71,6 +71,12 @@ final class AppModel: ObservableObject {
     @Published var pillOpacity: Double {
         didSet { UserDefaults.standard.set(pillOpacity, forKey: "verse.pillOpacity") }
     }
+    /// Web music players in browsers (YT Music web…) — accepted only when the
+    /// tab publishes music-shaped metadata (artist AND album). The coordinator
+    /// reads the persisted value directly.
+    @Published var webPlayers: Bool {
+        didSet { UserDefaults.standard.set(webPlayers, forKey: "verse.webPlayers") }
+    }
 
     // MARK: - Geometry (set by the panel controller at launch / on screen change)
     /// Font used to MEASURE pill text (chunks, titles) — must match the pill's
@@ -80,6 +86,14 @@ final class AppModel: ObservableObject {
 
     /// Measurement font for echo (bracketed) lines: serif italic at 75% of 13pt,
     /// mirroring `PillView`'s echo styling.
+    /// Italic variant of `pillFont` for measuring chunks that contain merged
+    /// ad-lib (italic) runs.
+    let pillItalicFont: NSFont = {
+        let base = NSFont.systemFont(ofSize: 13, weight: .medium)
+        let descriptor = base.fontDescriptor.withSymbolicTraits(.italic)
+        return NSFont(descriptor: descriptor, size: 13) ?? base
+    }()
+
     let echoFont: NSFont = {
         let size: CGFloat = 13 * 0.75
         let base = NSFont.systemFont(ofSize: size, weight: .regular)
@@ -189,6 +203,7 @@ final class AppModel: ObservableObject {
             rawValue: defaults.string(forKey: "verse.instrumental") ?? "") ?? .breathingDots
         syncOffset = defaults.double(forKey: "verse.syncOffset")
         pillOpacity = defaults.object(forKey: "verse.pillOpacity") as? Double ?? 0.35
+        webPlayers = defaults.object(forKey: "verse.webPlayers") as? Bool ?? true
 
         // Restore the saved anchor ("mode,x,y"). didSet does NOT fire for these
         // initial assignments, so `hasStoredPillAnchor` is set by hand — the
@@ -279,7 +294,11 @@ final class AppModel: ObservableObject {
         case .title:
             target = fittedPillWidth(text: pillTitleText, font: pillFont)
         case .chunk(let chunk):
-            target = fittedPillWidth(text: chunk.text, font: pillFont)
+            // Italic ad-lib runs are wider than the regular font — measure
+            // the whole chunk italic when any are present (slight
+            // over-measure is safe; under-measure truncates).
+            let font = chunk.words.contains(where: \.isEcho) ? pillItalicFont : pillFont
+            target = fittedPillWidth(text: chunk.text, font: font)
         case .echo(let chunk):
             target = fittedPillWidth(text: chunk.text, font: echoFont)
         case .blank:
@@ -397,9 +416,12 @@ final class AppModel: ObservableObject {
             guard !Task.isCancelled, self.currentTrackKey == key else { return }
             self.content = result
             if case .synced(let timeline) = result {
+                // Small safety margin: merged ad-lib runs render italic
+                // (slightly wider than the regular font the chunker measures
+                // with) — without headroom, edge chunks truncate.
                 self.compactChunks = LyricChunker.chunks(
                     for: timeline,
-                    maxWidth: self.pillTextWidth,
+                    maxWidth: self.pillTextWidth - 10,
                     font: self.pillFont
                 )
             } else {

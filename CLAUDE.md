@@ -134,8 +134,14 @@ when real word-level data exists. Never disable a theme for missing word data.
   `PassThroughHostingView.hitTest` keeps only the pill/popup shape clickable;
   everything else passes through. Esc/click-outside dismissal via local+global
   event monitors.
-- **Allowed sources (v1):** only Spotify (`com.spotify.client`) and Apple
-  Music (`com.apple.Music`). Browser audio is ignored entirely.
+- **Allowed sources (2026-07-25 expansion):** native music apps by bundle ID
+  (Spotify, Apple Music, YouTube Music desktop, TIDAL, Deezer, Amazon Music,
+  Plexamp, VOX, Swinsian — `NowPlayingCoordinator.musicApps`), plus WEB
+  players in known browsers when the tab publishes music-shaped metadata
+  (artist AND album via MediaSession — plain videos don't), gated by the
+  "Web players" settings toggle (`verse.webPlayers`, default on). Position
+  re-anchor polling remains Spotify/Apple Music only
+  (`scriptableSources`); other sources ride adapter timestamps.
 - **Now playing:** MediaRemote adapter (community `mediaremote-adapter`
   helper — MediaRemote is restricted since macOS 15.4) with an AppleScript
   polling fallback. `PlaybackClock` interpolates between sparse updates;

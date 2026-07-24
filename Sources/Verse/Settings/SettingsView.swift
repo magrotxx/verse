@@ -77,6 +77,15 @@ struct SettingsView: View {
                         .foregroundStyle(.tertiary)
                 }
 
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Web players (YouTube Music in a browser…)", isOn: $model.webPlayers)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                    Text("Browser tabs count only when they publish artist + album, so plain videos stay ignored.")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                }
+
                 Toggle("Launch Verse at login", isOn: $launchAtLogin)
                     .toggleStyle(.switch)
                     .controlSize(.small)
@@ -99,7 +108,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(20)
-        .frame(width: 380, height: 380)
+        .frame(width: 380, height: 450)
     }
 }
 
