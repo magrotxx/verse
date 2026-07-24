@@ -3,8 +3,8 @@ import AppKit
 
 /// Coordinate-space + anchor-math checks for `PillLayout` — the pill/popup
 /// geometry that has no live-NSScreen dependency. Locks the two flips
-/// (screen↔panel, panel↔hit), revision A's edge-anchor rules (screen-third
-/// classification, anchored-edge frames, clamping) and the dynamic-width
+/// (screen↔panel, panel↔hit), side parking (rail classification + rail x,
+/// 2026-07-25), anchored-edge frames, clamping, and the dynamic-width
 /// formula. Run via `swift run Verse --checks`.
 func runPillLayoutChecks() {
     let layout = PillLayout()
@@ -22,25 +22,26 @@ func runPillLayoutChecks() {
             && approx(visible.width, 1440) && approx(visible.height, 805)
     }
 
-    // MARK: default placement — centered anchor just under the menu bar
-    check("defaultAnchor: center mode at the visible midpoint, 8pt down") {
+    // MARK: default placement — parked on the right rail, under the menu bar
+    check("defaultAnchor: trailing rail, 8pt below the menu bar") {
         let d = PillLayout.defaultAnchor(visible: visible)
-        return d.mode == .center && approx(d.anchor.x, 720) && approx(d.anchor.y, 33)
+        return d.mode == .trailing && approx(d.anchor.x, 1428) && approx(d.anchor.y, 33)
     }
 
-    // MARK: revision A — screen-third anchor classification (pill CENTER x)
-    check("anchorMode: left third → leading") {
-        PillLayout.anchorMode(forCenterX: 200, visible: visible) == .leading
+    // MARK: side parking (2026-07-25) — nearer half decides the rail
+    check("snapSide: left half → leading") {
+        PillLayout.snapSide(forCenterX: 200, visible: visible) == .leading
     }
-    check("anchorMode: middle third → center") {
-        PillLayout.anchorMode(forCenterX: 720, visible: visible) == .center
+    check("snapSide: right half → trailing") {
+        PillLayout.snapSide(forCenterX: 1300, visible: visible) == .trailing
     }
-    check("anchorMode: right third → trailing") {
-        PillLayout.anchorMode(forCenterX: 1300, visible: visible) == .trailing
+    check("snapSide: midpoint boundary → trailing; just left of it → leading") {
+        PillLayout.snapSide(forCenterX: 720, visible: visible) == .trailing
+            && PillLayout.snapSide(forCenterX: 719.9, visible: visible) == .leading
     }
-    check("anchorMode: exact third boundaries fall to center") {
-        PillLayout.anchorMode(forCenterX: 480, visible: visible) == .center
-            && PillLayout.anchorMode(forCenterX: 960, visible: visible) == .center
+    check("railX: leading rail at the left margin, trailing at the right") {
+        approx(PillLayout.railX(side: .leading, visible: visible, edgeMargin: 12), 12)
+            && approx(PillLayout.railX(side: .trailing, visible: visible, edgeMargin: 12), 1428)
     }
 
     // MARK: revision A — anchored-edge frame math (all three modes)

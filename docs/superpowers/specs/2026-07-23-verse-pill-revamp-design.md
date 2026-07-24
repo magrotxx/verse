@@ -38,6 +38,26 @@ conflicts with anything later in the spec, THIS section wins:
 6. **Pre-first-line / no-lyrics states** keep showing "♪ Title — Artist" in
    the pill (unchanged), at whatever width that text needs per rule 2.
 
+## Design revision B (2026-07-25) — SUPERSEDES conflicting lines below
+
+1. **Paused = dim only.** The breathing pulse is removed; a paused pill holds
+   perfectly still at 60% opacity.
+2. **Side parking.** The pill lives on the LEFT or RIGHT rail only
+   (AssistiveTouch-style pick-and-drop): drag it anywhere, and on release it
+   glides to the nearer rail at the drop height. Revision A's screen-third
+   rule and center parking are gone (`.center` remains only for the first-run
+   demo until the first drop; legacy persisted center anchors snap to the
+   nearer rail at launch). Default placement: right rail, just below the
+   menu bar.
+3. **Smoother width transitions.** Near-critically-damped spring
+   (0.45/0.92); the pill's offset is continuous anchor math sharing one
+   spring with the width (no alignment flips), and no anchor spring runs
+   while a drag is live.
+4. **Pause robustness.** Pause events that arrive without a playback
+   position must not clobber the frozen lyric position (the first-pause
+   title-flash bug): while paused, an elapsed of ≈0 against a clock well
+   past it is treated as missing data.
+
 ## Problem
 
 "When I'm working I sometimes miss the lyrics of the song that's playing. I

@@ -1,9 +1,10 @@
 import AppKit
 
-/// Which edge of the pill stays fixed while its width follows the lyric
-/// (design revision A "edge-anchored growth"). Derived from the pill CENTER's
-/// screen third at drag-end: left third → `.leading` (grow rightward), right
-/// third → `.trailing` (grow leftward), middle → `.center` (symmetric).
+/// Which edge of the pill stays fixed while its width follows the lyric.
+/// Side parking (2026-07-25): the pill lives on the LEFT or RIGHT rail only —
+/// `.leading` (parked left, grows rightward) or `.trailing` (parked right,
+/// grows leftward). `.center` survives for the first-run demo's pre-drop spot;
+/// no drag-drop ever produces it.
 enum PillAnchorMode: String {
     case leading, center, trailing
 }
@@ -82,21 +83,22 @@ struct PillLayout {
 
     // MARK: - Default placement
 
-    /// First-launch anchor: horizontally centered (`.center` mode), just below
-    /// the menu bar (panel space).
-    static func defaultAnchor(visible: CGRect) -> (anchor: CGPoint, mode: PillAnchorMode) {
-        (CGPoint(x: visible.midX, y: visible.minY + 8), .center)
+    /// First-launch anchor: parked on the RIGHT rail, just below the menu bar.
+    static func defaultAnchor(visible: CGRect, edgeMargin: CGFloat = 12) -> (anchor: CGPoint, mode: PillAnchorMode) {
+        (CGPoint(x: visible.maxX - edgeMargin, y: visible.minY + 8), .trailing)
     }
 
-    // MARK: - Anchor math (revision A)
+    // MARK: - Anchor math (side parking, 2026-07-25)
 
-    /// Classify a pill-center x into the screen third that decides its anchor
-    /// mode. Boundaries fall to `.center`.
-    static func anchorMode(forCenterX x: CGFloat, visible: CGRect) -> PillAnchorMode {
-        let third = visible.width / 3
-        if x < visible.minX + third { return .leading }
-        if x > visible.minX + 2 * third { return .trailing }
-        return .center
+    /// AssistiveTouch-style pick-and-drop: the nearer screen half at drag-end
+    /// decides the pill's side. There is no center parking.
+    static func snapSide(forCenterX x: CGFloat, visible: CGRect) -> PillAnchorMode {
+        x < visible.midX ? .leading : .trailing
+    }
+
+    /// The anchored-edge x for a parked side — the "rail" the pill grows from.
+    static func railX(side: PillAnchorMode, visible: CGRect, edgeMargin: CGFloat) -> CGFloat {
+        side == .leading ? visible.minX + edgeMargin : visible.maxX - edgeMargin
     }
 
     /// The pill's LEFT edge for a given anchored-edge x. The anchored edge is

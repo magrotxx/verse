@@ -112,6 +112,18 @@ final class PillPanelController {
                 model.pillAnchor = placement.anchor
             }
         }
+        // Side parking (2026-07-25): anchors persisted by earlier builds can be
+        // `.center` — snap them to the nearer rail once. The first-run demo
+        // keeps its center spot until the user's first drop.
+        if model.hasStoredPillAnchor, model.pillAnchorMode == .center, !model.isFirstRunDemo {
+            let f = layout.pillFrame(anchor: model.pillAnchor, mode: .center, width: model.pillWidth)
+            let side = PillLayout.snapSide(forCenterX: f.midX, visible: visible)
+            model.pillAnchorMode = side
+            model.pillAnchor = CGPoint(
+                x: PillLayout.railX(side: side, visible: visible, edgeMargin: layout.edgeMargin),
+                y: f.minY
+            )
+        }
         model.clampPillAnchor()
     }
 

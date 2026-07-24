@@ -50,14 +50,23 @@ final class NowPlayingCoordinator {
                 let state = rawState.flatMap {
                     Self.allowedSources.contains($0.bundleIdentifier) ? $0 : nil
                 }
+                let playing = state?.isPlaying ?? false
+                // Pause diffs sometimes arrive without elapsedTime, which reaches
+                // us as 0 and would clobber the frozen lyric position (the pill
+                // then falls back to the title — the first-pause bug). While
+                // paused, elapsed ≈ 0 against a clock well past it is missing
+                // data, not a seek-to-start: keep the clock's own position.
+                // (A real seek-to-0 made while paused catches up on resume.)
+                let safeElapsed = (!playing && elapsed <= 0.05 && self.clock.position() > 1)
+                    ? self.clock.position() : elapsed
                 self.clock.update(
-                    elapsed: elapsed,
-                    playing: state?.isPlaying ?? false,
+                    elapsed: safeElapsed,
+                    playing: playing,
                     rate: rate == 0 ? 1 : rate,
                     duration: state?.duration ?? 0
                 )
-                self.updateLastState(bundleID: state?.bundleIdentifier, isPlaying: state?.isPlaying ?? false)
-                if let bundleID = state?.bundleIdentifier, state?.isPlaying == true {
+                self.updateLastState(bundleID: state?.bundleIdentifier, isPlaying: playing)
+                if let bundleID = state?.bundleIdentifier, playing {
                     self.poller.start(bundleID: bundleID)
                 } else {
                     self.poller.stop()

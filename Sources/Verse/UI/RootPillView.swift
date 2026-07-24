@@ -7,13 +7,13 @@ import AppKit
 /// `uiState` (with the container's spring) morphs the pill's lyric into the
 /// popup's current line and back.
 ///
-/// ## Edge-anchored placement (revision A)
+/// ## Side parking (2026-07-25, supersedes revision A's thirds rule)
 ///
-/// `model.pillAnchor` is the ANCHOR point (anchored-edge x + top y). The pill
-/// sits inside a fixed-width container (`pillMaxWidth`) aligned to that edge:
-/// the container never moves while the pill's width springs between per-line
-/// targets, so the anchored edge stays visually stationary — leading-anchored
-/// pills grow rightward, trailing leftward, centered symmetric.
+/// `model.pillAnchor` is the ANCHOR point (anchored-edge x + top y) on the
+/// LEFT or RIGHT rail. The pill's offset is continuous math of
+/// anchor/mode/width (`PillLayout.leftEdge`), and offset + width share one
+/// spring — the anchored (rail) edge stays visually stationary while the
+/// capsule grows inward. Drops glide to the nearer rail (`snapToRail`).
 ///
 /// ## Battery (Task 9)
 ///
@@ -48,9 +48,7 @@ struct RootPillView: View {
     // MARK: - Pill (anchored container)
 
     private var pillContainer: some View {
-        let maxW = model.pillMaxWidth
-        let mode = model.pillAnchorMode
-        return pillBody
+        pillBody
             .scaleEffect(bounceScale)
             // Exclusive tap so a double-click NEVER also fires the single-click
             // (which would open-then-close the popup). Drag is simultaneous so
@@ -68,10 +66,20 @@ struct RootPillView: View {
             )
             .simultaneousGesture(dragGesture)
             .contextMenu { PillContextMenu(model: model) }
-            // The fixed-width container that realizes the edge anchor: the pill
-            // aligns to the anchored edge inside it, and only the pill resizes.
-            .frame(width: maxW, height: model.pillLayout.pillHeight, alignment: containerAlignment(mode))
-            .offset(x: containerLeft(mode: mode, maxWidth: maxW), y: model.pillAnchor.y)
+            // Direct anchored placement: the offset is continuous math of
+            // anchor/mode/width, and offset + width share one spring, so the
+            // anchored edge stays put through width changes with no
+            // (unanimatable) Alignment flip — this is what keeps size
+            // transitions smooth. No anchor spring while a drag is live: the
+            // pill must track the pointer 1:1.
+            .offset(
+                x: PillLayout.leftEdge(
+                    anchorX: model.pillAnchor.x, mode: model.pillAnchorMode, width: model.pillWidth
+                ),
+                y: model.pillAnchor.y
+            )
+            .animation(dragBase == nil ? Motion.spring(0.45, 0.92) : nil, value: model.pillAnchor)
+            .animation(Motion.spring(0.45, 0.92), value: model.pillWidth)
     }
 
     /// The pill itself, with a TimelineView mounted only when needed:
@@ -95,24 +103,6 @@ struct RootPillView: View {
                     wall: context.date.timeIntervalSinceReferenceDate
                 )
             }
-        }
-    }
-
-    private func containerAlignment(_ mode: PillAnchorMode) -> Alignment {
-        switch mode {
-        case .leading: return .leading
-        case .center: return .center
-        case .trailing: return .trailing
-        }
-    }
-
-    /// Panel-space x of the fixed container's left edge — positioned so the
-    /// container's anchored edge lands exactly on `pillAnchor.x`.
-    private func containerLeft(mode: PillAnchorMode, maxWidth: CGFloat) -> CGFloat {
-        switch mode {
-        case .leading: return model.pillAnchor.x
-        case .center: return model.pillAnchor.x - maxWidth / 2
-        case .trailing: return model.pillAnchor.x - maxWidth
         }
     }
 
@@ -161,27 +151,28 @@ struct RootPillView: View {
             }
             .onEnded { _ in
                 dragBase = nil
-                reanchorAfterDrag()
+                snapToRail()
                 model.endFirstRunDemo()   // the first drag retires the demo
             }
     }
 
-    /// Drag-end reclassification: pick the anchor mode from the pill CENTER's
-    /// screen third, then convert the anchor x so the frame is unchanged.
-    private func reanchorAfterDrag() {
-        let width = model.pillWidth
+    /// AssistiveTouch-style drop (2026-07-25): glide to the nearer side rail,
+    /// keeping the drop height. Mode + anchor move in one spring transaction —
+    /// the offset math is continuous, so the glide is a single smooth motion.
+    private func snapToRail() {
+        let visible = model.pillVisibleRect
         let frame = model.pillLayout.pillFrame(
-            anchor: model.pillAnchor, mode: model.pillAnchorMode, width: width
+            anchor: model.pillAnchor, mode: model.pillAnchorMode, width: model.pillWidth
         )
-        let newMode = PillLayout.anchorMode(forCenterX: frame.midX, visible: model.pillVisibleRect)
-        if newMode != model.pillAnchorMode {
-            model.pillAnchorMode = newMode
+        let side = PillLayout.snapSide(forCenterX: frame.midX, visible: visible)
+        withAnimation(Motion.spring(0.45, 0.82)) {
+            model.pillAnchorMode = side
             model.pillAnchor = CGPoint(
-                x: PillLayout.anchorX(forLeftEdge: frame.minX, mode: newMode, width: width),
+                x: PillLayout.railX(side: side, visible: visible, edgeMargin: model.pillLayout.edgeMargin),
                 y: frame.minY
             )
+            model.clampPillAnchor()
         }
-        model.clampPillAnchor()
     }
 }
 

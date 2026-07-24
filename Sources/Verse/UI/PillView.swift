@@ -94,11 +94,13 @@ struct PillView: View {
                 Capsule(style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
-            // Paused: breathe (live wall time) + dim to 60%. The ball is calm.
-            .scaleEffect(isBall ? 1 : breathingScale)
+            // Paused: dim to 60%, perfectly still (breathing pulse removed —
+            // user decision 2026-07-25).
             .opacity(model.isPaused && !isBall ? 0.6 : 1)
-            // Dynamic width: spring the capsule between per-line targets.
-            .animation(Motion.spring(0.4, 0.85), value: model.pillWidth)
+            // Dynamic width: near-critically-damped spring between per-line
+            // targets (matches the anchor spring in RootPillView so offset and
+            // width read as one motion).
+            .animation(Motion.spring(0.45, 0.92), value: model.pillWidth)
             // Width recompute is a per-line event: fires when the displayed
             // chunk/state changes, never per frame.
             .onChange(of: widthKey(display), initial: true) { model.refreshPillWidth() }
@@ -133,13 +135,6 @@ struct PillView: View {
             GlassBackground()
             Color.black.opacity(0.6)
         }
-    }
-
-    // MARK: - Paused breathing (live wall time; ~3s period, ±1.5% scale)
-
-    private var breathingScale: CGFloat {
-        guard model.isPaused, !Motion.reduce else { return 1 }   // no scale choreography under RM
-        return 1 + 0.015 * CGFloat(sin(wall * .pi * 2 / 3))
     }
 
     // MARK: - Content views
