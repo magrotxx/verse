@@ -90,6 +90,11 @@ struct LyricLineRenderer: View {
     // Whole line at ~32% brightness; a wave of full brightness sweeps
     // left→right, synced to the vocal. Animated gradient text mask.
 
+    /// The brand amber the website's hero wipe uses (#E8B168) — the sung text
+    /// glows this gold in the default theme, matching the site (user decision
+    /// 2026-07-25).
+    static let brandAmber = Color(red: 232 / 255, green: 177 / 255, blue: 104 / 255)
+
     private var wipe: some View {
         let p = sweepProgress
         let feather = 0.10
@@ -98,7 +103,7 @@ struct LyricLineRenderer: View {
         return ZStack {
             lineText.foregroundStyle(style.dim)
             lineText
-                .foregroundStyle(style.bright)
+                .foregroundStyle(Self.brandAmber)
                 .mask(
                     LinearGradient(
                         stops: [
