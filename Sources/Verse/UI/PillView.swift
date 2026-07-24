@@ -5,25 +5,30 @@ import SwiftUI
 /// by the `--checks` runner without any SwiftUI/AppKit; `PillView` only turns
 /// the choice into pixels.
 enum PillDisplay: Equatable {
-    case title              // pre-first-line, plain lyrics, or none found
-    case chunk(LyricChunk)  // active synced chunk
-    case echo(LyricChunk)   // active chunk that is a bracketed ad-lib
-    case dots(tiny: Bool)   // instrumental break (tiny for very long gaps)
-    case blank              // brief (<3s) inter-line gap
+    case ball                     // idle: no track loaded, or hidden-until-next-song
+    case title                    // pre-first-line, plain lyrics, or none found
+    case chunk(LyricChunk)        // active synced chunk
+    case echo(LyricChunk)         // active chunk that is a bracketed ad-lib
+    case instrumental(tiny: Bool) // break >3s: rising notes (tiny capsule >15s)
+    case blank                    // brief (<3s) inter-line gap
 
     /// Pick the pill's content at time `t`.
-    /// - Instrumental gaps: >15s → tiny dots, >3s → dots, else blank.
+    /// - No track (or user hid until next song) → the idle ball.
+    /// - Instrumental gaps: >15s → tiny, >3s → instrumental, else blank.
     static func at(
         t: TimeInterval,
         content: LyricsContent,
         chunks: [LyricChunk],
-        duration: TimeInterval
+        duration: TimeInterval,
+        trackLoaded: Bool,
+        hiddenUntilTrackChange: Bool
     ) -> PillDisplay {
+        guard trackLoaded, !hiddenUntilTrackChange else { return .ball }
         switch content {
         case .none, .plain:
             return .title
         case .instrumental:
-            return .dots(tiny: false)
+            return .instrumental(tiny: false)
         case .synced(let timeline):
             guard let first = chunks.first else { return .title }
             if t < first.start { return .title }            // pre-first-line
@@ -31,8 +36,8 @@ enum PillDisplay: Equatable {
                 return isEcho(active, lines: timeline.lines) ? .echo(active) : .chunk(active)
             }
             let gap = gapLength(chunks: chunks, t: t, duration: duration)
-            if gap > 15 { return .dots(tiny: true) }
-            if gap > 3 { return .dots(tiny: false) }
+            if gap > 15 { return .instrumental(tiny: true) }
+            if gap > 3 { return .instrumental(tiny: false) }
             return .blank
         }
     }
@@ -61,48 +66,72 @@ enum PillDisplay: Equatable {
     }
 }
 
-/// The floating glass pill: the current lyric line (or title / breathing dots),
-/// tinted by the album palette.
+/// The floating pill (design revision A): translucent BLACK glass — no album
+/// wash, no accent glow; the album palette colors only the lyric text. Width is
+/// dynamic (model-owned, spring-animated) and the capsule contracts to a ball
+/// when idle.
 ///
 /// Per-frame content swaps are driven by playback time `t` and faded with
 /// `chunkFade` — never SwiftUI `.transition`s: an `.id`/`.transition` swap
 /// strands outgoing views mid-transition inside a `TimelineView`'s per-frame
 /// re-renders, whereas an opacity derived from `t` is glitch-proof. `wall` is a
-/// live wall-clock feed for the paused breathing pulse, which must keep moving
-/// even though `t` is frozen while paused.
+/// live wall-clock feed for the paused breathing pulse and the rising notes,
+/// which must keep moving even though `t` freezes while paused.
 struct PillView: View {
     @ObservedObject var model: AppModel
     var morph: Namespace.ID
     let t: TimeInterval       // lyric/playback time (frozen when paused)
-    let wall: TimeInterval    // live wall-clock seconds (paused breathing)
+    let wall: TimeInterval    // live wall-clock seconds
 
     var body: some View {
-        let display = PillDisplay.at(
-            t: t, content: model.content,
-            chunks: model.compactChunks, duration: model.now?.duration ?? 0
-        )
-        let width = displayWidth(for: display)
+        let display = currentDisplay()
+        let isBall = display == .ball
         return contentView(display)
-            .frame(width: width, height: model.pillLayout.pillHeight)
+            .frame(width: model.pillWidth, height: model.pillLayout.pillHeight)
             .background(glass)
             .clipShape(Capsule(style: .continuous))
             .overlay(
                 Capsule(style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 1)
             )
-            .shadow(color: model.palette.accent.opacity(0.25), radius: 12)
-            // Paused: breathe (live wall time) + dim to 60%.
-            .scaleEffect(breathingScale)
-            .opacity(model.isPaused ? 0.6 : 1)
-            // Instrumental contraction / expansion springs on width only.
-            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: width)
+            .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
+            // Paused: breathe (live wall time) + dim to 60%. The ball is calm.
+            .scaleEffect(isBall ? 1 : breathingScale)
+            .opacity(model.isPaused && !isBall ? 0.6 : 1)
+            // Dynamic width: spring the capsule between per-line targets.
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: model.pillWidth)
+            // Width recompute is a per-line event: fires when the displayed
+            // chunk/state changes, never per frame.
+            .onChange(of: widthKey(display), initial: true) { model.refreshPillWidth() }
     }
 
-    // MARK: - Glass + album wash
+    private func currentDisplay() -> PillDisplay {
+        PillDisplay.at(
+            t: t, content: model.content,
+            chunks: model.compactChunks, duration: model.now?.duration ?? 0,
+            trackLoaded: model.now != nil,
+            hiddenUntilTrackChange: model.hiddenUntilTrackChange
+        )
+    }
+
+    /// Collapses a display to the identity that decides pill width — the model
+    /// re-measures only when this changes.
+    private func widthKey(_ display: PillDisplay) -> String {
+        switch display {
+        case .ball: return "ball"
+        case .title: return "title|\(model.pillTitleText)"
+        case .chunk(let chunk): return "chunk|\(chunk.id)"
+        case .echo(let chunk): return "echo|\(chunk.id)"
+        case .instrumental(let tiny): return tiny ? "notes-tiny" : "notes"
+        case .blank: return "blank"
+        }
+    }
+
+    // MARK: - Glass (revision A: neutral black, no album tint)
 
     private var glass: some View {
         ZStack {
             GlassBackground()
-            model.palette.background.opacity(0.35)
+            Color.black.opacity(0.6)
         }
     }
 
@@ -113,40 +142,35 @@ struct PillView: View {
         return 1 + 0.015 * CGFloat(sin(wall * .pi * 2 / 3))
     }
 
-    // MARK: - Width per state
-
-    private func displayWidth(for display: PillDisplay) -> CGFloat {
-        switch display {
-        case .dots(let tiny): return tiny ? 56 : 96
-        default: return model.pillWidth
-        }
-    }
-
     // MARK: - Content views
 
     @ViewBuilder
     private func contentView(_ display: PillDisplay) -> some View {
         switch display {
+        case .ball:             ballView
         case .title:            titleView
         case .chunk(let chunk): chunkView(chunk)
         case .echo(let chunk):  echoView(chunk)
-        case .dots:             dotsView
+        case .instrumental:     RisingNotes(t: wall)
         case .blank:            Color.clear
         }
     }
 
+    /// Idle ball: a translucent music note in a 30pt circle (the capsule at
+    /// ball width IS a circle). Static — nothing animates while nothing plays.
+    private var ballView: some View {
+        Image(systemName: "music.note")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.white.opacity(0.4))
+    }
+
     private var titleView: some View {
-        Text(titleText)
+        Text(model.pillTitleText)
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(model.palette.bright.opacity(0.6))
             .lineLimit(1)
             .truncationMode(.tail)
             .padding(.horizontal, 16)
-    }
-
-    private var titleText: String {
-        guard let now = model.now else { return "" }
-        return "♪ \(TitleCleaner.clean(now.title)) — \(now.artist)"
     }
 
     private func chunkView(_ chunk: LyricChunk) -> some View {
@@ -173,10 +197,6 @@ struct PillView: View {
             .matchedGeometryEffect(id: "currentLyric", in: morph, isSource: model.uiState != .popup)
     }
 
-    private var dotsView: some View {
-        BreathingDots(color: model.palette.bright, t: wall)
-    }
-
     // MARK: - Time-driven crossfade
 
     /// 0→1 over the chunk's first 0.25s, 1→0 over its last 0.25s — adjacent
@@ -190,34 +210,45 @@ struct PillView: View {
     }
 }
 
-/// Apple Music-style breathing dots for instrumental breaks.
-/// (Moved verbatim from VibeModeView so both the pill and popup can use it.)
-struct BreathingDots: View {
-    let color: Color
+/// Instrumental-break animation (revision A): small music notes rising out of
+/// the contracted capsule, drifting upward ~9pt while fading in and out,
+/// staggered thirds of a ~2.2s loop. A pure function of `t` (wall clock) — no
+/// SwiftUI transitions, safe inside TimelineView.
+struct RisingNotes: View {
     let t: TimeInterval
 
+    private static let period: TimeInterval = 2.2
+
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(color)
-                    .frame(width: 7, height: 7)
-                    .opacity(opacity(for: i))
-                    .scaleEffect(scale(for: i))
-            }
+        ZStack {
+            note(index: 0, x: -9, size: 8)
+            note(index: 1, x: 0.5, size: 9.5)
+            note(index: 2, x: 9, size: 8)
         }
     }
 
-    private func pulse(for index: Int) -> Double {
-        let phase = sin((t * .pi * 2.0 / 2.4) - Double(index) * 0.7)
-        return (phase + 1.0) / 2.0
+    private func note(index: Int, x: CGFloat, size: CGFloat) -> some View {
+        let p = phase(index)
+        return Image(systemName: "music.note")
+            .font(.system(size: size, weight: .medium))
+            .foregroundStyle(.white.opacity(0.55))
+            .offset(x: x, y: rise(p))
+            .opacity(fade(p))
     }
 
-    private func opacity(for index: Int) -> Double {
-        0.35 + 0.45 * pulse(for: index)
+    /// Staggered 0→1 loop progress for each note.
+    private func phase(_ index: Int) -> Double {
+        let shifted = t / Self.period + Double(index) / 3.0
+        return shifted - shifted.rounded(.down)
     }
 
-    private func scale(for index: Int) -> Double {
-        0.85 + 0.2 * pulse(for: index)
+    /// Drift upward ~9pt across the loop.
+    private func rise(_ p: Double) -> CGFloat {
+        CGFloat(4.5 - 9.0 * p)
+    }
+
+    /// Fade in then out (sine bump).
+    private func fade(_ p: Double) -> Double {
+        sin(p * .pi) * 0.9
     }
 }

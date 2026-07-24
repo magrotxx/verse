@@ -27,7 +27,7 @@ final class PassThroughHostingView<Content: View>: NSHostingView<Content> {
 
 /// Owns the single full-screen transparent panel that hosts the floating pill.
 /// The panel spans `screen.frame`; the pill/popup are positioned *inside* the
-/// SwiftUI hierarchy by `model.pillOrigin` (the window itself never moves), and
+/// SwiftUI hierarchy by `model.pillAnchor` (the window itself never moves), and
 /// `PassThroughHostingView` lets every click outside the visible shape fall
 /// through to whatever app is behind it.
 @MainActor
@@ -63,7 +63,7 @@ final class PillPanelController {
 
         let hosting = PassThroughHostingView(rootView: RootPillView(model: model))
         hosting.interactiveRect = { [weak self, weak model] in
-            guard let self, let model, model.uiState != .hidden else { return .zero }
+            guard let self, let model else { return .zero }
             return self.interactiveRect(for: model)
         }
         panel.contentView = hosting
@@ -88,32 +88,39 @@ final class PillPanelController {
 
     // MARK: - Geometry
 
-    /// Panel = whole screen; pill width + visible-area clamp follow the screen.
+    /// Panel = whole screen; max pill width + visible-area clamp follow the
+    /// screen. The pill's ACTUAL width is dynamic (model-owned, revision A).
     private func configureGeometry(for screen: NSScreen?) {
         guard let screen else { return }
         panel.setFrame(screen.frame, display: true)
 
         let visible = PillLayout.visibleRectInPanelSpace(screen: screen)
         model.pillVisibleRect = visible
-        model.pillWidth = layout.pillMaxWidth(screen: screen)
+        model.pillMaxWidth = layout.pillMaxWidth(screen: screen)
 
-        if !model.hasStoredPillOrigin {
-            model.pillOrigin = PillLayout.defaultOrigin(pillWidth: model.pillWidth, visible: visible)
+        if !model.hasStoredPillAnchor {
+            let placement = PillLayout.defaultAnchor(visible: visible)
+            model.pillAnchorMode = placement.mode
+            model.pillAnchor = placement.anchor
         }
-        model.clampPillOrigin(to: visible)
+        model.clampPillAnchor()
+    }
+
+    /// The pill's current frame in panel space, derived from anchor/mode/width.
+    private func pillPanelFrame() -> CGRect {
+        layout.pillFrame(
+            anchor: model.pillAnchor, mode: model.pillAnchorMode, width: model.pillWidth
+        )
     }
 
     /// Interactive shape in AppKit (bottom-left) hosting-view coordinates.
+    /// The pill (or idle ball) is always present — revision A removed `.hidden`.
     private func interactiveRect(for model: AppModel) -> CGRect {
-        let panelHeight = panel.frame.height
+        let frame = pillPanelFrame()
         let pillRect = PillLayout.hitRect(
-            topLeft: model.pillOrigin,
-            size: CGSize(width: model.pillWidth, height: layout.pillHeight),
-            panelHeight: panelHeight
+            topLeft: frame.origin, size: frame.size, panelHeight: panel.frame.height
         )
         switch model.uiState {
-        case .hidden:
-            return .zero
         case .pill:
             return pillRect
         case .popup:
@@ -123,9 +130,7 @@ final class PillPanelController {
 
     /// Popup rect in AppKit (bottom-left) hosting-view coordinates.
     private func popupHitRect() -> CGRect {
-        let popup = layout.popupRect(
-            pillOrigin: model.pillOrigin, pillWidth: model.pillWidth, visible: model.pillVisibleRect
-        )
+        let popup = layout.popupRect(pillFrame: pillPanelFrame(), visible: model.pillVisibleRect)
         return PillLayout.hitRect(topLeft: popup.origin, size: popup.size, panelHeight: panel.frame.height)
     }
 

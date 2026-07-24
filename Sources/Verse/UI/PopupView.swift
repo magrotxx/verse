@@ -36,10 +36,12 @@ struct PopupView: View {
         .shadow(color: .black.opacity(0.4), radius: 20, y: 8)
     }
 
+    /// Revision A: neutral dark glass — the album palette tints only the
+    /// content (lyrics, scrubber, buttons), never the material.
     private var glass: some View {
         ZStack {
             GlassBackground()
-            model.palette.background.opacity(0.25)
+            Color.black.opacity(0.6)
         }
     }
 
@@ -364,5 +366,37 @@ struct PopupView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Apple Music-style breathing dots — used only by the popup's instrumental
+/// indicator now (revision A replaced the pill's dots with `RisingNotes`).
+struct BreathingDots: View {
+    let color: Color
+    let t: TimeInterval
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(color)
+                    .frame(width: 7, height: 7)
+                    .opacity(opacity(for: i))
+                    .scaleEffect(scale(for: i))
+            }
+        }
+    }
+
+    private func pulse(for index: Int) -> Double {
+        let phase = sin((t * .pi * 2.0 / 2.4) - Double(index) * 0.7)
+        return (phase + 1.0) / 2.0
+    }
+
+    private func opacity(for index: Int) -> Double {
+        0.35 + 0.45 * pulse(for: index)
+    }
+
+    private func scale(for index: Int) -> Double {
+        0.85 + 0.2 * pulse(for: index)
     }
 }

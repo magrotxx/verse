@@ -32,9 +32,10 @@ enum InstrumentalStyle: String, CaseIterable, Identifiable {
     }
 }
 
-/// The pill's three visual states (renamed from the old notch `NotchUIState`;
-/// `.compact` → `.pill`, `.expanded` → `.popup`).
-enum PillUIState { case hidden, pill, popup }
+/// The pill's two visual states. Design revision A removed `.hidden`: the pill
+/// never leaves the screen — with no music it contracts into the idle BALL
+/// (a content state decided by `PillDisplay`, not a window state).
+enum PillUIState { case pill, popup }
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -43,12 +44,13 @@ final class AppModel: ObservableObject {
     @Published private(set) var content: LyricsContent = .none
     @Published private(set) var compactChunks: [LyricChunk] = []
     @Published private(set) var palette: Palette = .fallback
-    @Published var uiState: PillUIState = .hidden
+    @Published var uiState: PillUIState = .pill
     @Published var pinned = false
     @Published var browsing = false          // scroll-to-browse full list in vibe mode
     @Published var scrubbing = false
-    /// User chose "Hide until next song": the pill stays gone while this track
-    /// keeps playing, and reappears when the track changes. Reset in `apply()`.
+    /// User chose "Hide until next song": the pill contracts to the idle ball
+    /// while this track keeps playing, and re-inflates when the track changes.
+    /// Reset in `apply()`.
     @Published var hiddenUntilTrackChange = false
 
     // MARK: - Settings (persisted)
@@ -66,41 +68,60 @@ final class AppModel: ObservableObject {
     }
 
     // MARK: - Geometry (set by the panel controller at launch / on screen change)
-    /// Font used to MEASURE chunks — must match the pill's lyric render size
-    /// (`LyricRenderStyle.pill`, 13pt medium) or chunks would over/underflow.
+    /// Font used to MEASURE pill text (chunks, titles) — must match the pill's
+    /// lyric render size (`LyricRenderStyle.pill`, 13pt medium) or the dynamic
+    /// width would over/underflow.
     let pillFont = NSFont.systemFont(ofSize: 13, weight: .medium)
 
-    /// Text budget for chunking: the pill width minus 16pt of horizontal padding
-    /// on each side. Chunks are sized to fit this so the fixed-width pill never
-    /// resizes per line.
-    var pillTextWidth: CGFloat { pillWidth - 32 }
+    /// Measurement font for echo (bracketed) lines: serif italic at 75% of 13pt,
+    /// mirroring `PillView`'s echo styling.
+    let echoFont: NSFont = {
+        let size: CGFloat = 13 * 0.75
+        let base = NSFont.systemFont(ofSize: size, weight: .regular)
+        var descriptor = base.fontDescriptor
+        if let serif = descriptor.withDesign(.serif) { descriptor = serif }
+        descriptor = descriptor.withSymbolicTraits(.italic)
+        return NSFont(descriptor: descriptor, size: size) ?? base
+    }()
+
+    /// Widest the pill may grow on this screen (set by the panel controller).
+    var pillMaxWidth: CGFloat = 460
+
+    /// Chunking budget: only lines wider than this split into sequential chunks
+    /// (revision A — the pill hugs shorter lines whole).
+    var pillTextWidth: CGFloat { pillMaxWidth - 32 }
 
     /// Pure geometry helpers (pill/popup size, clamping, coordinate flips).
     let pillLayout = PillLayout()
 
-    /// The pill's TOP-LEFT corner in SwiftUI panel space (top-left origin,
-    /// Y grows down). Persisted so the pill returns to where the user dropped
-    /// it. See `PillLayout` for the space definitions.
-    @Published var pillOrigin: CGPoint {
-        didSet {
-            hasStoredPillOrigin = true
-            UserDefaults.standard.set("\(pillOrigin.x),\(pillOrigin.y)", forKey: "verse.pillOrigin")
-        }
+    /// The pill's ANCHOR point in SwiftUI panel space: x of the anchored edge
+    /// (per `pillAnchorMode`) + the pill's TOP y. Revision A: as the width
+    /// follows the lyric, the anchored edge never moves — so the anchor, not a
+    /// top-left corner, is what's persisted (key `verse.pillAnchor`).
+    @Published var pillAnchor: CGPoint {
+        didSet { persistAnchor() }
     }
 
-    /// Fixed capsule width while a song plays (no per-line resizing). Set by the
-    /// panel controller from the screen; chunks fit within `pillTextWidth`.
-    @Published var pillWidth: CGFloat = 240
+    /// Which pill edge `pillAnchor.x` pins (reclassified from the pill center's
+    /// screen third at drag-end). Persisted alongside the anchor.
+    @Published var pillAnchorMode: PillAnchorMode {
+        didSet { persistAnchor() }
+    }
+
+    /// Current capsule width — revision A dynamic: follows the displayed text
+    /// via `refreshPillWidth()` (per line-change, not per frame). Views animate
+    /// changes with a spring; hit-testing reads the target value.
+    @Published var pillWidth: CGFloat = PillLayout.ballDiameter
 
     /// The current screen's visible area (excludes menu bar + dock) expressed in
     /// panel space. Written by the panel controller; read for live drag-clamping
-    /// and popup placement. Not `@Published` — every mutation of `pillOrigin`
+    /// and popup placement. Not `@Published` — every mutation of `pillAnchor`
     /// that depends on it is applied imperatively right after it changes.
     var pillVisibleRect: CGRect = .zero
 
-    /// False until the very first launch persists a position; lets the panel
+    /// False until the very first launch persists an anchor; lets the panel
     /// controller drop the pill at its default spot only once.
-    private(set) var hasStoredPillOrigin = false
+    private(set) var hasStoredPillAnchor = false
 
     // MARK: - Engine
     let clock = PlaybackClock()
@@ -125,27 +146,93 @@ final class AppModel: ObservableObject {
             rawValue: defaults.string(forKey: "verse.instrumental") ?? "") ?? .breathingDots
         syncOffset = defaults.double(forKey: "verse.syncOffset")
 
-        // Restore the pill's saved position ("x,y"). didSet does NOT fire for
-        // these initial assignments, so `hasStoredPillOrigin` is set by hand —
-        // the panel controller uses it to place the pill at its default spot
-        // only when nothing was persisted yet.
-        if let saved = defaults.string(forKey: "verse.pillOrigin") {
-            let parts = saved.split(separator: ",").compactMap { Double($0) }
-            if parts.count == 2 {
-                pillOrigin = CGPoint(x: parts[0], y: parts[1])
-                hasStoredPillOrigin = true
-            } else {
-                pillOrigin = .zero
+        // Restore the saved anchor ("mode,x,y"). didSet does NOT fire for these
+        // initial assignments, so `hasStoredPillAnchor` is set by hand — the
+        // panel controller uses it to place the pill at its default spot only
+        // when nothing was persisted yet.
+        var restoredAnchor = CGPoint.zero
+        var restoredMode = PillAnchorMode.center
+        var restored = false
+        if let saved = defaults.string(forKey: "verse.pillAnchor") {
+            let parts = saved.split(separator: ",").map(String.init)
+            if parts.count == 3,
+               let mode = PillAnchorMode(rawValue: parts[0]),
+               let x = Double(parts[1]), let y = Double(parts[2]) {
+                restoredAnchor = CGPoint(x: x, y: y)
+                restoredMode = mode
+                restored = true
             }
-        } else {
-            pillOrigin = .zero
+        }
+        pillAnchor = restoredAnchor
+        pillAnchorMode = restoredMode
+        hasStoredPillAnchor = restored
+        // Pre-revision-A key (top-left "x,y") is dead — a fresh default is fine.
+        defaults.removeObject(forKey: "verse.pillOrigin")
+    }
+
+    private func persistAnchor() {
+        hasStoredPillAnchor = true
+        UserDefaults.standard.set(
+            "\(pillAnchorMode.rawValue),\(pillAnchor.x),\(pillAnchor.y)",
+            forKey: "verse.pillAnchor"
+        )
+    }
+
+    /// Clamp `pillAnchor` so the whole pill (at its current width and anchor
+    /// mode) stays inside the visible area with the layout's edge margin.
+    /// Assigning `pillAnchor` persists it.
+    func clampPillAnchor() {
+        guard pillVisibleRect.width > 0 else { return }
+        let clamped = pillLayout.clampedAnchor(
+            pillAnchor, mode: pillAnchorMode, width: pillWidth, visible: pillVisibleRect
+        )
+        if clamped != pillAnchor { pillAnchor = clamped }
+    }
+
+    // MARK: - Dynamic pill width (revision A)
+
+    /// "♪ Title — Artist" shown pre-first-line / for plain / missing lyrics.
+    var pillTitleText: String {
+        guard let now else { return "" }
+        return "♪ \(TitleCleaner.clean(now.title)) — \(now.artist)"
+    }
+
+    /// Recompute the pill's target width from what it is displaying right now.
+    /// Called on model-side changes (track/lyrics/pause) and by the view when
+    /// the displayed chunk changes (a per-line event, never per frame). While a
+    /// short `<3s` gap shows `.blank`, the previous width is kept.
+    func refreshPillWidth() {
+        let display = PillDisplay.at(
+            t: lyricPosition(), content: content, chunks: compactChunks,
+            duration: now?.duration ?? 0,
+            trackLoaded: now != nil, hiddenUntilTrackChange: hiddenUntilTrackChange
+        )
+        let target: CGFloat?
+        switch display {
+        case .ball:
+            target = PillLayout.ballDiameter
+        case .instrumental(let tiny):
+            target = tiny ? PillLayout.ballDiameter : pillLayout.instrumentalWidth
+        case .title:
+            target = fittedPillWidth(text: pillTitleText, font: pillFont)
+        case .chunk(let chunk):
+            target = fittedPillWidth(text: chunk.text, font: pillFont)
+        case .echo(let chunk):
+            target = fittedPillWidth(text: chunk.text, font: echoFont)
+        case .blank:
+            target = nil    // hold the last width through brief inter-line gaps
+        }
+        if let target, abs(target - pillWidth) > 0.5 {
+            pillWidth = target
+            clampPillAnchor()   // a wider pill may need nudging off an edge
         }
     }
 
-    /// Clamp `pillOrigin` so the whole pill stays inside `visible` (panel space)
-    /// with the layout's edge margin. Assigning `pillOrigin` persists it.
-    func clampPillOrigin(to visible: CGRect) {
-        pillOrigin = pillLayout.clampedOrigin(pillOrigin, pillWidth: pillWidth, visible: visible)
+    private func fittedPillWidth(text: String, font: NSFont) -> CGFloat {
+        PillLayout.pillWidth(
+            forTextWidth: LyricChunker.width(of: text, font: font),
+            maxWidth: pillMaxWidth
+        )
     }
 
     // MARK: - Lifecycle
@@ -171,7 +258,10 @@ final class AppModel: ObservableObject {
             compactChunks = []
             pausedLyricPosition = nil
             hiddenUntilTrackChange = false
-            if uiState != .hidden { uiState = .hidden }
+            // Revision A: music stopping contracts the pill to the idle ball —
+            // it never leaves the screen. Only an open popup needs collapsing.
+            if uiState == .popup { uiState = .pill }
+            refreshPillWidth()
             return
         }
 
@@ -179,14 +269,8 @@ final class AppModel: ObservableObject {
         let artworkArrived = now?.artwork == nil && state.artwork != nil
         now = state
 
-        // A new song clears a "hide until next song" request.
+        // A new song clears a "hide until next song" request (ball → pill).
         if trackChanged { hiddenUntilTrackChange = false }
-        // Show the pill unless the user hid it for the rest of this track.
-        if hiddenUntilTrackChange {
-            if uiState != .hidden { uiState = .hidden }
-        } else if uiState == .hidden {
-            uiState = .pill
-        }
 
         // Freeze lyric time on pause (capture once), release on resume. Capturing
         // here — after the coordinator has pushed the paused position into the
@@ -209,6 +293,7 @@ final class AppModel: ObservableObject {
                 artwork: state.artwork
             )
         }
+        refreshPillWidth()
     }
 
     private func fetchLyrics(for state: NowPlayingState) {
@@ -228,6 +313,7 @@ final class AppModel: ObservableObject {
             } else {
                 self.compactChunks = []
             }
+            self.refreshPillWidth()
         }
     }
 
@@ -254,10 +340,12 @@ final class AppModel: ObservableObject {
     func nextTrack() { coordinator.nextTrack() }
     func previousTrack() { coordinator.previousTrack() }
 
-    /// Hide the pill until the current track ends / changes (context-menu item).
+    /// Contract the pill to the idle ball until the current track ends /
+    /// changes (context-menu item). Revision A: "hide" means ball, not gone.
     func hideUntilNextTrack() {
         hiddenUntilTrackChange = true
-        uiState = .hidden
+        if uiState == .popup { uiState = .pill }
+        refreshPillWidth()
     }
 
     /// Right-click "Lyric timing" nudges — clamped to the same ±1s the settings
@@ -317,7 +405,7 @@ final class AppModel: ObservableObject {
                 guard let self, self.pinned else { return }
                 if Self.frontmostSpaceIsFullscreen() {
                     self.pinned = false
-                    self.uiState = self.now == nil ? .hidden : .pill
+                    self.uiState = .pill
                     self.exitBrowse()
                 }
             }

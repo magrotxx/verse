@@ -1,9 +1,10 @@
 #if DEBUG
 import AppKit
 
-/// Verifies `PillDisplay.at` — the pure pill content state machine (title /
-/// chunk / echo / dots / blank) and its instrumental-gap thresholds. This is
-/// the on-screen behavior the headless `--checks` run can still pin down.
+/// Verifies `PillDisplay.at` — the pure pill content state machine (ball /
+/// title / chunk / echo / rising-notes / blank) and its instrumental-gap
+/// thresholds. This is the on-screen behavior the headless `--checks` run can
+/// still pin down.
 func runPillContentChecks() {
     // Timeline: line 0 sings, line 1 is a whole-line echo "(ooh)", line 2 is
     // far away leaving a 17s instrumental gap (3s → 20s).
@@ -21,41 +22,55 @@ func runPillContentChecks() {
     let content = LyricsContent.synced(LyricsTimeline(lines: lines))
     let chunks = [a, b, c]
 
+    /// `PillDisplay.at` with a loaded, visible track (the common case).
+    func at(_ t: TimeInterval, _ content: LyricsContent, _ chunks: [LyricChunk]) -> PillDisplay {
+        PillDisplay.at(t: t, content: content, chunks: chunks, duration: 25,
+                       trackLoaded: true, hiddenUntilTrackChange: false)
+    }
+
+    // MARK: revision A — the idle ball outranks everything
+    check("PillDisplay: no track loaded → the idle ball") {
+        PillDisplay.at(t: 1.5, content: content, chunks: chunks, duration: 25,
+                       trackLoaded: false, hiddenUntilTrackChange: false) == .ball
+    }
+    check("PillDisplay: hidden-until-next-song → the ball even mid-song") {
+        PillDisplay.at(t: 1.5, content: content, chunks: chunks, duration: 25,
+                       trackLoaded: true, hiddenUntilTrackChange: true) == .ball
+    }
+
     check("PillDisplay: before the first line shows the title") {
-        PillDisplay.at(t: 0.5, content: content, chunks: chunks, duration: 25) == .title
+        at(0.5, content, chunks) == .title
     }
     check("PillDisplay: inside a sung chunk shows that chunk") {
-        PillDisplay.at(t: 1.5, content: content, chunks: chunks, duration: 25) == .chunk(a)
+        at(1.5, content, chunks) == .chunk(a)
     }
     check("PillDisplay: a bracketed line renders as an echo") {
-        PillDisplay.at(t: 2.5, content: content, chunks: chunks, duration: 25) == .echo(b)
+        at(2.5, content, chunks) == .echo(b)
     }
-    check("PillDisplay: a >15s gap contracts to tiny dots") {
-        PillDisplay.at(t: 10, content: content, chunks: chunks, duration: 25) == .dots(tiny: true)
+    check("PillDisplay: a >15s gap contracts to the tiny notes capsule") {
+        at(10, content, chunks) == .instrumental(tiny: true)
     }
 
-    // 5s gap (2 → 7): dots, not tiny.
+    // 5s gap (2 → 7): rising notes, not tiny.
     let midGap = [a, LyricChunk(id: "9-0", lineIndex: 9, start: 7, end: 8, text: "later",
                                 words: LyricsTimeline.synthesizeWords(text: "later", start: 7, end: 8))]
-    check("PillDisplay: a 3–15s gap shows (non-tiny) dots") {
-        PillDisplay.at(t: 4, content: LyricsContent.synced(LyricsTimeline(lines: lines)),
-                       chunks: midGap, duration: 25) == .dots(tiny: false)
+    check("PillDisplay: a 3–15s gap shows the (non-tiny) rising notes") {
+        at(4, LyricsContent.synced(LyricsTimeline(lines: lines)), midGap)
+            == .instrumental(tiny: false)
     }
 
-    // 1.5s gap (2 → 3.5): blank, not dots.
+    // 1.5s gap (2 → 3.5): blank, not notes.
     let shortGap = [a, LyricChunk(id: "8-0", lineIndex: 8, start: 3.5, end: 4.5, text: "soon",
                                   words: LyricsTimeline.synthesizeWords(text: "soon", start: 3.5, end: 4.5))]
     check("PillDisplay: a <3s inter-line gap is blank") {
-        PillDisplay.at(t: 2.7, content: LyricsContent.synced(LyricsTimeline(lines: lines)),
-                       chunks: shortGap, duration: 25) == .blank
+        at(2.7, LyricsContent.synced(LyricsTimeline(lines: lines)), shortGap) == .blank
     }
 
     check("PillDisplay: no lyrics / plain lyrics fall back to the title") {
-        PillDisplay.at(t: 5, content: .none, chunks: [], duration: 25) == .title
-            && PillDisplay.at(t: 5, content: .plain("x"), chunks: [], duration: 25) == .title
+        at(5, .none, []) == .title && at(5, .plain("x"), []) == .title
     }
-    check("PillDisplay: a fully instrumental track shows dots") {
-        PillDisplay.at(t: 5, content: .instrumental, chunks: [], duration: 25) == .dots(tiny: false)
+    check("PillDisplay: a fully instrumental track shows the rising notes") {
+        at(5, .instrumental, []) == .instrumental(tiny: false)
     }
 
     // Echo detection: whole-line flag path (words not bracketed, line is).

@@ -1,5 +1,13 @@
 import AppKit
 
+/// Which edge of the pill stays fixed while its width follows the lyric
+/// (design revision A "edge-anchored growth"). Derived from the pill CENTER's
+/// screen third at drag-end: left third → `.leading` (grow rightward), right
+/// third → `.trailing` (grow leftward), middle → `.center` (symmetric).
+enum PillAnchorMode: String {
+    case leading, center, trailing
+}
+
 /// Geometry for the floating pill + popup. Every screen-space calculation lives
 /// here as a *pure* function so the coordinate math can be exercised by the
 /// `--checks` runner without a live `NSScreen`.
@@ -15,7 +23,7 @@ import AppKit
 ///   points delivered to `PassThroughHostingView.hitTest(_:)`.
 /// * **SwiftUI panel space** — origin TOP-left, `Y` grows DOWN. The full-screen
 ///   panel's content view spans `screen.frame`; SwiftUI lays the pill out in
-///   this space, so `AppModel.pillOrigin` (the pill's top-left corner) is a
+///   this space, so `AppModel.pillAnchor` (anchored-edge x + pill top y) is a
 ///   panel-space point.
 ///
 /// The panel's top edge sits at AppKit `y = frame.maxY`, so converting a `Y`
@@ -30,10 +38,23 @@ struct PillLayout {
     var popupSize = CGSize(width: 400, height: 248)
     var edgeMargin: CGFloat = 12
 
-    /// The pill never resizes per line; this is the fixed capsule width for a
-    /// given screen — `min(38% of screen width, 460)`.
+    /// Idle-ball diameter — equals `pillHeight`, so the capsule reads as a circle.
+    static let ballDiameter: CGFloat = 30
+
+    /// Capsule width during instrumental breaks (contracted, rising note glyphs).
+    var instrumentalWidth: CGFloat = 44
+
+    /// The widest the pill may grow on a given screen — `min(38% of width, 460)`.
+    /// Lines wider than this (minus padding) are chunked.
     func pillMaxWidth(screen: NSScreen) -> CGFloat {
         min(screen.frame.width * 0.38, 460)
+    }
+
+    /// Revision A dynamic width: the capsule hugs the displayed text.
+    /// `textWidth + 32` (16pt horizontal padding each side), never narrower
+    /// than the ball, never wider than `maxWidth`.
+    static func pillWidth(forTextWidth textWidth: CGFloat, maxWidth: CGFloat) -> CGFloat {
+        min(max(textWidth + 32, ballDiameter), maxWidth)
     }
 
     // MARK: - Screen space → panel space
@@ -61,26 +82,69 @@ struct PillLayout {
 
     // MARK: - Default placement
 
-    /// Top-center of the visible area, 8pt below the menu bar (panel space).
-    static func defaultOrigin(pillWidth: CGFloat, visible: CGRect) -> CGPoint {
-        CGPoint(
-            x: visible.minX + (visible.width - pillWidth) / 2,
-            y: visible.minY + 8
+    /// First-launch anchor: horizontally centered (`.center` mode), just below
+    /// the menu bar (panel space).
+    static func defaultAnchor(visible: CGRect) -> (anchor: CGPoint, mode: PillAnchorMode) {
+        (CGPoint(x: visible.midX, y: visible.minY + 8), .center)
+    }
+
+    // MARK: - Anchor math (revision A)
+
+    /// Classify a pill-center x into the screen third that decides its anchor
+    /// mode. Boundaries fall to `.center`.
+    static func anchorMode(forCenterX x: CGFloat, visible: CGRect) -> PillAnchorMode {
+        let third = visible.width / 3
+        if x < visible.minX + third { return .leading }
+        if x > visible.minX + 2 * third { return .trailing }
+        return .center
+    }
+
+    /// The pill's LEFT edge for a given anchored-edge x. The anchored edge is
+    /// the one that must not move as `width` changes.
+    static func leftEdge(anchorX: CGFloat, mode: PillAnchorMode, width: CGFloat) -> CGFloat {
+        switch mode {
+        case .leading: return anchorX
+        case .center: return anchorX - width / 2
+        case .trailing: return anchorX - width
+        }
+    }
+
+    /// Inverse of `leftEdge`: the anchor x that puts the pill's left edge at
+    /// `left` under `mode` — used to convert between modes without moving the
+    /// pill (drag-end reclassification).
+    static func anchorX(forLeftEdge left: CGFloat, mode: PillAnchorMode, width: CGFloat) -> CGFloat {
+        switch mode {
+        case .leading: return left
+        case .center: return left + width / 2
+        case .trailing: return left + width
+        }
+    }
+
+    /// The pill's frame (panel space, top-left) for an anchor point + mode + width.
+    func pillFrame(anchor: CGPoint, mode: PillAnchorMode, width: CGFloat) -> CGRect {
+        CGRect(
+            x: Self.leftEdge(anchorX: anchor.x, mode: mode, width: width),
+            y: anchor.y,
+            width: width,
+            height: pillHeight
         )
     }
 
-    // MARK: - Clamp
-
-    /// Clamp a panel-space top-left `origin` so the whole pill stays inside
-    /// `visible` with `edgeMargin` of breathing room on every edge. Pure.
-    func clampedOrigin(_ origin: CGPoint, pillWidth: CGFloat, visible: CGRect) -> CGPoint {
-        let minX = visible.minX + edgeMargin
-        let maxX = visible.maxX - pillWidth - edgeMargin
+    /// Clamp an anchor so the WHOLE pill (at `width`, under `mode`) stays inside
+    /// `visible` with `edgeMargin` breathing room: clamp the derived left edge,
+    /// then convert back to an anchor x. Pure.
+    func clampedAnchor(
+        _ anchor: CGPoint, mode: PillAnchorMode, width: CGFloat, visible: CGRect
+    ) -> CGPoint {
+        let left = Self.leftEdge(anchorX: anchor.x, mode: mode, width: width)
+        let minLeft = visible.minX + edgeMargin
+        let maxLeft = visible.maxX - width - edgeMargin
+        let clampedLeft = clampValue(left, minLeft, max(minLeft, maxLeft))
         let minY = visible.minY + edgeMargin
         let maxY = visible.maxY - pillHeight - edgeMargin
         return CGPoint(
-            x: clampValue(origin.x, minX, max(minX, maxX)),
-            y: clampValue(origin.y, minY, max(minY, maxY))
+            x: Self.anchorX(forLeftEdge: clampedLeft, mode: mode, width: width),
+            y: clampValue(anchor.y, minY, max(minY, maxY))
         )
     }
 
@@ -104,20 +168,20 @@ struct PillLayout {
 
     // MARK: - Popup placement
 
-    /// The popup rect in panel space (top-left). It grows DOWN from the pill's
-    /// top edge when the pill sits in the visible area's top half, else UP from
-    /// the pill's bottom edge; horizontally centered on the pill and clamped to
-    /// `visible` + `edgeMargin` on every edge. Pure.
-    func popupRect(pillOrigin: CGPoint, pillWidth: CGFloat, visible: CGRect) -> CGRect {
+    /// The popup rect in panel space (top-left), anchored to the pill's current
+    /// frame. It grows DOWN from the pill's top edge when the pill sits in the
+    /// visible area's top half, else UP from the pill's bottom edge;
+    /// horizontally centered on the pill and clamped to `visible` + `edgeMargin`
+    /// on every edge. Pure.
+    func popupRect(pillFrame: CGRect, visible: CGRect) -> CGRect {
         let size = popupSize
-        let pillCenterX = pillOrigin.x + pillWidth / 2
         let minX = visible.minX + edgeMargin
         let maxX = visible.maxX - size.width - edgeMargin
-        let x = clampValue(pillCenterX - size.width / 2, minX, max(minX, maxX))
+        let x = clampValue(pillFrame.midX - size.width / 2, minX, max(minX, maxX))
 
         let midY = visible.minY + visible.height / 2
-        let growsDown = pillOrigin.y < midY
-        let rawY = growsDown ? pillOrigin.y : (pillOrigin.y + pillHeight - size.height)
+        let growsDown = pillFrame.minY < midY
+        let rawY = growsDown ? pillFrame.minY : (pillFrame.maxY - size.height)
         let minY = visible.minY + edgeMargin
         let maxY = visible.maxY - size.height - edgeMargin
         let y = clampValue(rawY, minY, max(minY, maxY))
