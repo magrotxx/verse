@@ -26,7 +26,8 @@ enum VerseChecks {
         runPlaybackClockChecks,
         runFittedFontChecks,
         runPillLayoutChecks,
-        runPillContentChecks
+        runPillContentChecks,
+        runMotionChecks
     ]
 
     /// When launched with `--checks`, runs every registered suite and exits

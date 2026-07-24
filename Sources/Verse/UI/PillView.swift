@@ -98,7 +98,7 @@ struct PillView: View {
             .scaleEffect(isBall ? 1 : breathingScale)
             .opacity(model.isPaused && !isBall ? 0.6 : 1)
             // Dynamic width: spring the capsule between per-line targets.
-            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: model.pillWidth)
+            .animation(Motion.spring(0.4, 0.85), value: model.pillWidth)
             // Width recompute is a per-line event: fires when the displayed
             // chunk/state changes, never per frame.
             .onChange(of: widthKey(display), initial: true) { model.refreshPillWidth() }
@@ -138,7 +138,7 @@ struct PillView: View {
     // MARK: - Paused breathing (live wall time; ~3s period, ±1.5% scale)
 
     private var breathingScale: CGFloat {
-        guard model.isPaused else { return 1 }
+        guard model.isPaused, !Motion.reduce else { return 1 }   // no scale choreography under RM
         return 1 + 0.015 * CGFloat(sin(wall * .pi * 2 / 3))
     }
 
@@ -220,10 +220,17 @@ struct RisingNotes: View {
     private static let period: TimeInterval = 2.2
 
     var body: some View {
-        ZStack {
-            note(index: 0, x: -9, size: 8)
-            note(index: 1, x: 0.5, size: 9.5)
-            note(index: 2, x: 9, size: 8)
+        if Motion.reduce {
+            // Reduce Motion: one calm static note, no drift choreography.
+            Image(systemName: "music.note")
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
+        } else {
+            ZStack {
+                note(index: 0, x: -9, size: 8)
+                note(index: 1, x: 0.5, size: 9.5)
+                note(index: 2, x: 9, size: 8)
+            }
         }
     }
 

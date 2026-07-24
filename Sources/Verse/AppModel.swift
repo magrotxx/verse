@@ -123,6 +123,24 @@ final class AppModel: ObservableObject {
     /// controller drop the pill at its default spot only once.
     private(set) var hasStoredPillAnchor = false
 
+    // MARK: - Motion / battery / first-run (Task 9)
+
+    /// TimelineView frame cap: `nil` = uncapped (ProMotion); 1/30 s in Low
+    /// Power Mode so the per-frame lyric work eases off on battery.
+    @Published var frameInterval: Double?
+
+    /// True from the very first launch until the first real track or the first
+    /// drag — while true (and nothing plays) the pill sits center-screen
+    /// looping a demo line with a "drag me" caption.
+    @Published private(set) var isFirstRunDemo: Bool
+
+    /// Wall-clock start of the demo (caption fades 8s in).
+    let demoStartWall: TimeInterval = Date.timeIntervalSinceReferenceDate
+
+    /// True when the pill shows the static idle ball — no animation is running,
+    /// so RootPillView mounts NO TimelineView at all (CPU ~0 when idle).
+    var showsIdleBall: Bool { now == nil || hiddenUntilTrackChange }
+
     // MARK: - Engine
     let clock = PlaybackClock()
     private lazy var coordinator = NowPlayingCoordinator(clock: clock)
@@ -168,6 +186,20 @@ final class AppModel: ObservableObject {
         hasStoredPillAnchor = restored
         // Pre-revision-A key (top-left "x,y") is dead — a fresh default is fine.
         defaults.removeObject(forKey: "verse.pillOrigin")
+
+        isFirstRunDemo = !defaults.bool(forKey: "verse.launched")
+        frameInterval = ProcessInfo.processInfo.isLowPowerModeEnabled ? 1.0 / 30.0 : nil
+    }
+
+    /// The built-in line the first-run demo loops.
+    static let demoText = "and the city hums along in gold"
+
+    /// The first real track or the first drag ends the demo permanently.
+    func endFirstRunDemo() {
+        guard isFirstRunDemo else { return }
+        isFirstRunDemo = false
+        UserDefaults.standard.set(true, forKey: "verse.launched")
+        refreshPillWidth()   // demo pill → ball (or the live track's width)
     }
 
     private func persistAnchor() {
@@ -202,6 +234,11 @@ final class AppModel: ObservableObject {
     /// the displayed chunk changes (a per-line event, never per frame). While a
     /// short `<3s` gap shows `.blank`, the previous width is kept.
     func refreshPillWidth() {
+        // First-run demo (no music yet): size to the demo line.
+        if isFirstRunDemo && now == nil {
+            applyPillWidth(fittedPillWidth(text: Self.demoText, font: pillFont))
+            return
+        }
         let display = PillDisplay.at(
             t: lyricPosition(), content: content, chunks: compactChunks,
             duration: now?.duration ?? 0,
@@ -222,10 +259,13 @@ final class AppModel: ObservableObject {
         case .blank:
             target = nil    // hold the last width through brief inter-line gaps
         }
-        if let target, abs(target - pillWidth) > 0.5 {
-            pillWidth = target
-            clampPillAnchor()   // a wider pill may need nudging off an edge
-        }
+        if let target { applyPillWidth(target) }
+    }
+
+    private func applyPillWidth(_ target: CGFloat) {
+        guard abs(target - pillWidth) > 0.5 else { return }
+        pillWidth = target
+        clampPillAnchor()   // a wider pill may need nudging off an edge
     }
 
     private func fittedPillWidth(text: String, font: NSFont) -> CGFloat {
@@ -243,6 +283,29 @@ final class AppModel: ObservableObject {
         }
         coordinator.start()
         observeFullscreen()
+        observeMotionAndPower()
+        refreshPillWidth()   // demo width on first run; ball width otherwise
+    }
+
+    /// Reduce Motion + Low Power Mode observers. The accessibility notification
+    /// arrives on the main thread; the power one arrives on a BACKGROUND thread
+    /// — both hop to the main actor before touching model state.
+    private func observeMotionAndPower() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            // Motion.reduce is read live by the views; publishing a change
+            // makes every observer re-evaluate its animations.
+            Task { @MainActor in self?.objectWillChange.send() }
+        }
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name.NSProcessInfoPowerStateDidChange,
+            object: nil, queue: nil        // ⚠️ delivered on a background thread
+        ) { [weak self] _ in
+            let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+            Task { @MainActor in self?.frameInterval = lowPower ? 1.0 / 30.0 : nil }
+        }
     }
 
     func stop() {
@@ -268,6 +331,9 @@ final class AppModel: ObservableObject {
         let trackChanged = state.trackKey != currentTrackKey
         let artworkArrived = now?.artwork == nil && state.artwork != nil
         now = state
+
+        // The first real track retires the first-run demo for good.
+        endFirstRunDemo()
 
         // A new song clears a "hide until next song" request (ball → pill).
         if trackChanged { hiddenUntilTrackChange = false }

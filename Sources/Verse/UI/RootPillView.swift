@@ -14,6 +14,12 @@ import AppKit
 /// the container never moves while the pill's width springs between per-line
 /// targets, so the anchored edge stays visually stationary — leading-anchored
 /// pills grow rightward, trailing leftward, centered symmetric.
+///
+/// ## Battery (Task 9)
+///
+/// The per-frame `TimelineView` mounts ONLY while something animates: idle
+/// (ball, no music) renders a static `PillView` with no timeline at all, and
+/// live timelines honor `model.frameInterval` (30fps cap in Low Power Mode).
 struct RootPillView: View {
     @ObservedObject var model: AppModel
 
@@ -36,7 +42,7 @@ struct RootPillView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: model.uiState)
+        .animation(Motion.spring(0.45, 0.85), value: model.uiState)
     }
 
     // MARK: - Pill (anchored container)
@@ -44,35 +50,52 @@ struct RootPillView: View {
     private var pillContainer: some View {
         let maxW = model.pillMaxWidth
         let mode = model.pillAnchorMode
-        return TimelineView(.animation) { context in
-            PillView(
-                model: model,
-                morph: morph,
-                t: model.lyricPosition(),
-                wall: context.date.timeIntervalSinceReferenceDate
+        return pillBody
+            .scaleEffect(bounceScale)
+            // Exclusive tap so a double-click NEVER also fires the single-click
+            // (which would open-then-close the popup). Drag is simultaneous so
+            // it coexists with taps; 3pt threshold keeps taps from jittering.
+            // Clicks are inert while no track is loaded (idle ball) — revision A.
+            .gesture(
+                ExclusiveGesture(
+                    TapGesture(count: 2).onEnded {
+                        guard model.now != nil else { return }
+                        model.togglePlayPause()
+                        triggerBounce()
+                    },
+                    TapGesture(count: 1).onEnded { expand() }
+                )
             )
+            .simultaneousGesture(dragGesture)
+            .contextMenu { PillContextMenu(model: model) }
+            // The fixed-width container that realizes the edge anchor: the pill
+            // aligns to the anchored edge inside it, and only the pill resizes.
+            .frame(width: maxW, height: model.pillLayout.pillHeight, alignment: containerAlignment(mode))
+            .offset(x: containerLeft(mode: mode, maxWidth: maxW), y: model.pillAnchor.y)
+    }
+
+    /// The pill itself, with a TimelineView mounted only when needed:
+    /// - first-run demo (no music yet): demo loop timeline
+    /// - idle ball: STATIC view, no timeline, zero per-frame work
+    /// - playing/paused song: the live lyric timeline
+    @ViewBuilder
+    private var pillBody: some View {
+        if model.isFirstRunDemo && model.now == nil {
+            TimelineView(.animation(minimumInterval: model.frameInterval)) { context in
+                DemoPill(model: model, wall: context.date.timeIntervalSinceReferenceDate)
+            }
+        } else if model.showsIdleBall {
+            PillView(model: model, morph: morph, t: 0, wall: 0)
+        } else {
+            TimelineView(.animation(minimumInterval: model.frameInterval)) { context in
+                PillView(
+                    model: model,
+                    morph: morph,
+                    t: model.lyricPosition(),
+                    wall: context.date.timeIntervalSinceReferenceDate
+                )
+            }
         }
-        .scaleEffect(bounceScale)
-        // Exclusive tap so a double-click NEVER also fires the single-click
-        // (which would open-then-close the popup). Drag is simultaneous so it
-        // coexists with taps; 3pt threshold keeps a tap from registering as one.
-        // Clicks are inert while no track is loaded (idle ball) — revision A.
-        .gesture(
-            ExclusiveGesture(
-                TapGesture(count: 2).onEnded {
-                    guard model.now != nil else { return }
-                    model.togglePlayPause()
-                    triggerBounce()
-                },
-                TapGesture(count: 1).onEnded { expand() }
-            )
-        )
-        .simultaneousGesture(dragGesture)
-        .contextMenu { PillContextMenu(model: model) }
-        // The fixed-width container that realizes the edge anchor: the pill
-        // aligns to the anchored edge inside it, and only the pill resizes.
-        .frame(width: maxW, height: model.pillLayout.pillHeight, alignment: containerAlignment(mode))
-        .offset(x: containerLeft(mode: mode, maxWidth: maxW), y: model.pillAnchor.y)
     }
 
     private func containerAlignment(_ mode: PillAnchorMode) -> Alignment {
@@ -115,8 +138,9 @@ struct RootPillView: View {
     }
 
     private func triggerBounce() {
+        guard !Motion.reduce else { return }   // scale choreography off under Reduce Motion
         bounceScale = 0.94
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { bounceScale = 1 }
+        withAnimation(Motion.spring(0.3, 0.5)) { bounceScale = 1 }
     }
 
     /// Manual drag in GLOBAL space: measuring translation in a space that does
@@ -138,6 +162,7 @@ struct RootPillView: View {
             .onEnded { _ in
                 dragBase = nil
                 reanchorAfterDrag()
+                model.endFirstRunDemo()   // the first drag retires the demo
             }
     }
 
@@ -157,6 +182,57 @@ struct RootPillView: View {
             )
         }
         model.clampPillAnchor()
+    }
+}
+
+/// First-run moment: the pill loops a demo line center-screen with a one-time
+/// caption underneath ("drag me"). Same material recipe as the real pill; all
+/// timing derives from `wall`, so it is a pure per-frame render.
+private struct DemoPill: View {
+    @ObservedObject var model: AppModel
+    let wall: TimeInterval
+
+    private static let loopLength: TimeInterval = 4.5
+    private static let demoWords: [WordTiming] = LyricsTimeline.synthesizeWords(
+        text: AppModel.demoText, start: 0.4, end: 4.1
+    )
+
+    var body: some View {
+        let loop = (wall - model.demoStartWall).truncatingRemainder(dividingBy: Self.loopLength)
+        LyricLineRenderer(
+            words: Self.demoWords, text: AppModel.demoText,
+            start: 0.4, end: 4.1,
+            theme: model.theme, style: .pill(model.palette), t: loop
+        )
+        .padding(.horizontal, 16)
+        .frame(width: model.pillWidth, height: model.pillLayout.pillHeight)
+        .background(
+            ZStack {
+                GlassBackground()
+                Color.black.opacity(0.6)
+            }
+        )
+        .clipShape(Capsule(style: .continuous))
+        .overlay(
+            Capsule(style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
+        // One-time caption below the pill; fades out 8s in (time-driven).
+        .overlay(alignment: .top) {
+            Text("Drag me somewhere comfy — click to open")
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.6))
+                .fixedSize()
+                .offset(y: model.pillLayout.pillHeight + 10)
+                .opacity(captionOpacity)
+        }
+    }
+
+    /// 1 for the first 8s of the demo, then a quick fade to 0.
+    private var captionOpacity: Double {
+        let elapsed = wall - model.demoStartWall
+        if elapsed < 8 { return 1 }
+        return max(0, 1 - (elapsed - 8) / 0.6)
     }
 }
 

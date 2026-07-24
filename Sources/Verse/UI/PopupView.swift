@@ -15,7 +15,7 @@ struct PopupView: View {
     private var size: CGSize { model.pillLayout.popupSize }
 
     var body: some View {
-        TimelineView(.animation) { _ in
+        TimelineView(.animation(minimumInterval: model.frameInterval, paused: false)) { _ in
             VStack(spacing: 8) {
                 header
                 lyricsArea(t: model.lyricPosition())
@@ -173,7 +173,7 @@ struct PopupView: View {
         }
         .frame(height: 84)
         .frame(maxWidth: .infinity)
-        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: idx)
+        .animation(Motion.spring(0.45, 0.85), value: idx)
     }
 
     /// The current (center) line: echo lines render as static italic serif;
@@ -298,6 +298,7 @@ struct PopupView: View {
                 }
                 .frame(height: geo.size.height)
                 .contentShape(Rectangle())
+                // Already a ≤200ms fade — inherently Reduce Motion-compliant.
                 .animation(.easeOut(duration: 0.15), value: barHeight)
                 .gesture(
                     DragGesture(minimumDistance: 0)

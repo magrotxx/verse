@@ -99,9 +99,18 @@ final class PillPanelController {
         model.pillMaxWidth = layout.pillMaxWidth(screen: screen)
 
         if !model.hasStoredPillAnchor {
-            let placement = PillLayout.defaultAnchor(visible: visible)
-            model.pillAnchorMode = placement.mode
-            model.pillAnchor = placement.anchor
+            if model.isFirstRunDemo {
+                // First-run moment: the demo pill appears center-screen and
+                // settles wherever the user drops it.
+                model.pillAnchorMode = .center
+                model.pillAnchor = CGPoint(
+                    x: visible.midX, y: visible.midY - layout.pillHeight / 2
+                )
+            } else {
+                let placement = PillLayout.defaultAnchor(visible: visible)
+                model.pillAnchorMode = placement.mode
+                model.pillAnchor = placement.anchor
+            }
         }
         model.clampPillAnchor()
     }
