@@ -123,6 +123,26 @@ final class AppModel: ObservableObject {
     /// controller drop the pill at its default spot only once.
     private(set) var hasStoredPillAnchor = false
 
+    /// True while the AppKit drag tracker is moving the pill — views suspend
+    /// the anchor spring so the pill follows the pointer 1:1.
+    @Published var isDraggingPill = false
+
+    /// AssistiveTouch-style drop (2026-07-25): glide to the nearer side rail,
+    /// keeping the drop height. Called by the panel's drag tracker at mouse-up.
+    func snapPillToRail() {
+        guard pillVisibleRect.width > 0 else { return }
+        let frame = pillLayout.pillFrame(anchor: pillAnchor, mode: pillAnchorMode, width: pillWidth)
+        let side = PillLayout.snapSide(forCenterX: frame.midX, visible: pillVisibleRect)
+        withAnimation(Motion.spring(0.45, 0.82)) {
+            pillAnchorMode = side
+            pillAnchor = CGPoint(
+                x: PillLayout.railX(side: side, visible: pillVisibleRect, edgeMargin: pillLayout.edgeMargin),
+                y: frame.minY
+            )
+            clampPillAnchor()
+        }
+    }
+
     // MARK: - Motion / battery / first-run (Task 9)
 
     /// TimelineView frame cap: `nil` = uncapped (ProMotion); 1/30 s in Low

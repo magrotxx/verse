@@ -11,9 +11,28 @@ final class PillPanel: NSPanel {
 /// Hosting view that passes clicks through everywhere except the current visible
 /// shape (pill or popup), so the transparent rest of the full-screen panel never
 /// blocks the apps behind it.
+///
+/// It also owns the pill DRAG at the AppKit level: SwiftUI's DragGesture proved
+/// unreliable under the tap/contextMenu stack (the drag never fired on real
+/// hardware), and raw mouse tracking cannot be eaten by gesture composition.
+/// A press that lands on the pill arms tracking; once it moves past 3pt the
+/// events are consumed (SwiftUI's pending taps never complete) and the deltas
+/// drive the model. Presses in the popup state are never armed, so the popup's
+/// own SwiftUI gestures (scrubber, seek) are untouched.
 final class PassThroughHostingView<Content: View>: NSHostingView<Content> {
     /// Interactive shape in this view's AppKit (bottom-left) coordinates.
     var interactiveRect: @MainActor () -> CGRect = { .zero }
+
+    /// True while the pill (not the popup) is showing — only then may a press
+    /// arm the drag tracker.
+    var isPillState: @MainActor () -> Bool = { false }
+    var onPillDragBegan: @MainActor () -> Void = {}
+    /// Total translation since mouse-down, in panel TOP-LEFT space.
+    var onPillDragMoved: @MainActor (CGSize) -> Void = { _ in }
+    var onPillDragEnded: @MainActor () -> Void = {}
+
+    private var pressWindowPoint: NSPoint?
+    private var dragging = false
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let p = superview.map { convert(point, from: $0) } ?? point
@@ -23,6 +42,46 @@ final class PassThroughHostingView<Content: View>: NSHostingView<Content> {
 
     /// First click should act even when the panel isn't key.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        if isPillState(), interactiveRect().contains(viewPoint) {
+            pressWindowPoint = event.locationInWindow
+            dragging = false
+        }
+        super.mouseDown(with: event)   // SwiftUI still sees the press (taps)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let press = pressWindowPoint else {
+            super.mouseDragged(with: event)
+            return
+        }
+        let loc = event.locationInWindow
+        let dx = loc.x - press.x
+        let dy = loc.y - press.y     // window space is bottom-left; flip for panel space
+        if !dragging, abs(dx) > 3 || abs(dy) > 3 {
+            dragging = true
+            onPillDragBegan()
+        }
+        if dragging {
+            onPillDragMoved(CGSize(width: dx, height: -dy))
+            // Consumed: SwiftUI stops receiving the sequence while dragging.
+        } else {
+            super.mouseDragged(with: event)
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        let wasDragging = dragging
+        dragging = false
+        pressWindowPoint = nil
+        if wasDragging {
+            onPillDragEnded()        // consume — no tap must fire off a drag
+        } else {
+            super.mouseUp(with: event)
+        }
+    }
 }
 
 /// Owns the single full-screen transparent panel that hosts the floating pill.
@@ -40,6 +99,10 @@ final class PillPanelController {
     private var localMouseMonitor: Any?
     private var globalMouseMonitor: Any?
     private var scrollMonitor: Any?
+
+    /// `pillAnchor` at drag start — the base the drag's total translation
+    /// applies to.
+    private var dragAnchorBase: CGPoint?
 
     init(model: AppModel) {
         self.model = model
@@ -65,6 +128,27 @@ final class PillPanelController {
         hosting.interactiveRect = { [weak self, weak model] in
             guard let self, let model else { return .zero }
             return self.interactiveRect(for: model)
+        }
+        // AppKit-level pill drag (see PassThroughHostingView). The base anchor
+        // is captured at drag start; every move applies the TOTAL translation
+        // to it, so there is no per-event accumulation drift.
+        hosting.isPillState = { [weak model] in model?.uiState == .pill }
+        hosting.onPillDragBegan = { [weak self, weak model] in
+            guard let self, let model else { return }
+            self.dragAnchorBase = model.pillAnchor
+            model.isDraggingPill = true
+        }
+        hosting.onPillDragMoved = { [weak self, weak model] delta in
+            guard let self, let model, let base = self.dragAnchorBase else { return }
+            model.pillAnchor = CGPoint(x: base.x + delta.width, y: base.y + delta.height)
+            model.clampPillAnchor()
+        }
+        hosting.onPillDragEnded = { [weak self, weak model] in
+            guard let self, let model else { return }
+            self.dragAnchorBase = nil
+            model.isDraggingPill = false
+            model.snapPillToRail()
+            model.endFirstRunDemo()   // the first drag retires the demo
         }
         panel.contentView = hosting
 

@@ -25,10 +25,6 @@ struct RootPillView: View {
 
     @Namespace private var morph
 
-    /// Anchor + mode captured at drag start so translation applies against a
-    /// stable base instead of accumulating per-frame rounding drift.
-    @State private var dragBase: (anchor: CGPoint, mode: PillAnchorMode)?
-
     /// Quick press-bounce on double-click (1 → 0.94 → 1 spring).
     @State private var bounceScale: CGFloat = 1
 
@@ -72,7 +68,8 @@ struct RootPillView: View {
                     TapGesture(count: 1).onEnded { expand() }
                 )
             )
-            .simultaneousGesture(dragGesture)
+            // Dragging is APPKIT-level (PassThroughHostingView) — SwiftUI's
+            // DragGesture proved unreliable under this tap/contextMenu stack.
             // Direct anchored placement: the offset is continuous math of
             // anchor/mode/width, and offset + width share one spring, so the
             // anchored edge stays put through width changes with no
@@ -85,7 +82,7 @@ struct RootPillView: View {
                 ),
                 y: model.pillAnchor.y
             )
-            .animation(dragBase == nil ? Motion.spring(0.45, 0.92) : nil, value: model.pillAnchor)
+            .animation(model.isDraggingPill ? nil : Motion.spring(0.45, 0.92), value: model.pillAnchor)
             .animation(Motion.spring(0.45, 0.92), value: model.pillWidth)
     }
 
@@ -140,47 +137,6 @@ struct RootPillView: View {
         withAnimation(Motion.spring(0.3, 0.5)) { bounceScale = 1 }
     }
 
-    /// Manual drag in GLOBAL space: measuring translation in a space that does
-    /// NOT move with the pill avoids the classic offset↔gesture feedback jitter.
-    /// The anchor MODE stays fixed during the drag; at drag-end the mode is
-    /// reclassified from the pill center's screen third and the anchor point is
-    /// converted so the pill does not move (same left edge, new anchor edge).
-    private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 2, coordinateSpace: .global)
-            .onChanged { value in
-                let base = dragBase ?? (model.pillAnchor, model.pillAnchorMode)
-                if dragBase == nil { dragBase = base }
-                model.pillAnchor = CGPoint(
-                    x: base.anchor.x + value.translation.width,
-                    y: base.anchor.y + value.translation.height
-                )
-                model.clampPillAnchor()
-            }
-            .onEnded { _ in
-                dragBase = nil
-                snapToRail()
-                model.endFirstRunDemo()   // the first drag retires the demo
-            }
-    }
-
-    /// AssistiveTouch-style drop (2026-07-25): glide to the nearer side rail,
-    /// keeping the drop height. Mode + anchor move in one spring transaction —
-    /// the offset math is continuous, so the glide is a single smooth motion.
-    private func snapToRail() {
-        let visible = model.pillVisibleRect
-        let frame = model.pillLayout.pillFrame(
-            anchor: model.pillAnchor, mode: model.pillAnchorMode, width: model.pillWidth
-        )
-        let side = PillLayout.snapSide(forCenterX: frame.midX, visible: visible)
-        withAnimation(Motion.spring(0.45, 0.82)) {
-            model.pillAnchorMode = side
-            model.pillAnchor = CGPoint(
-                x: PillLayout.railX(side: side, visible: visible, edgeMargin: model.pillLayout.edgeMargin),
-                y: frame.minY
-            )
-            model.clampPillAnchor()
-        }
-    }
 }
 
 /// First-run moment: the pill loops a demo line center-screen with a one-time
