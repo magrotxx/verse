@@ -34,22 +34,8 @@ struct PopupView: View {
             }
         }
         .frame(width: size.width, height: size.height)
-        .background(glass)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.4), radius: 20, y: 8)
-    }
-
-    /// Revision A: neutral dark glass — the album palette tints only the
-    /// content (lyrics, scrubber, buttons), never the material.
-    private var glass: some View {
-        ZStack {
-            GlassBackground()
-            Color.black.opacity(0.6)
-        }
+        // Chrome (glass, clip, border, shadow) lives on RootPillView's shell,
+        // which MORPHS between the pill capsule and this card — one shape.
     }
 
     // MARK: - Header
@@ -206,7 +192,8 @@ struct PopupView: View {
     /// Fit-to-width current-line size (floor 60% of 21.5 via FittedFont).
     private func fittedSize(for text: String) -> CGFloat {
         FittedFont.pointSize(
-            text: text, base: 21.5, weight: .semibold, design: .serif, maxWidth: 360
+            text: text, base: 21.5, weight: .semibold, design: .serif,
+            maxWidth: size.width - 40
         )
     }
 

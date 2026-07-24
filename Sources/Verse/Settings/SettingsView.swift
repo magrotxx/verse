@@ -50,6 +50,17 @@ struct SettingsView: View {
                     .frame(width: 150)
                 }
 
+                HStack {
+                    Text("Transparency")
+                    Spacer()
+                    Slider(value: $model.pillOpacity, in: 0.25...0.85, step: 0.05)
+                        .frame(width: 150)
+                    Text(String(format: "%.0f%%", model.pillOpacity * 100))
+                        .font(.system(size: 10).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, alignment: .trailing)
+                }
+
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
                         Text("Lyric timing")

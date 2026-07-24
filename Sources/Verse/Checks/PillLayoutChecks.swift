@@ -126,21 +126,21 @@ func runPillLayoutChecks() {
     check("popupRect: top-half pill grows the popup downward from its top") {
         let pill = CGRect(x: 490, y: 100, width: 460, height: 30)
         let r = layout.popupRect(pillFrame: pill, visible: visible)
-        return approx(r.minY, 100) && approx(r.height, 248)
+        return approx(r.minY, 100) && approx(r.height, 264)
     }
     check("popupRect: bottom-half pill grows the popup upward from its bottom") {
         // midY = 25 + 805/2 = 427.5; y=700 is below it → grow up.
-        // popup bottom aligns with pill bottom: rawY = 730 − 248 = 482.
+        // popup bottom aligns with pill bottom: rawY = 730 − 264 = 466.
         let pill = CGRect(x: 490, y: 700, width: 460, height: 30)
         let r = layout.popupRect(pillFrame: pill, visible: visible)
-        return approx(r.minY, 482) && approx(r.maxY, 730)
+        return approx(r.minY, 466) && approx(r.maxY, 730)
     }
     check("popupRect: horizontal center clamps to the visible margin") {
         // A narrow pill at the right edge would center the popup past
-        // maxX (1440 − 400 − 12 = 1028); it must clamp there.
+        // maxX (1440 − 560 − 12 = 868); it must clamp there.
         let pill = CGRect(x: 1300, y: 100, width: 100, height: 30)
         let r = layout.popupRect(pillFrame: pill, visible: visible)
-        return approx(r.minX, 1028)
+        return approx(r.minX, 868)
     }
 }
 

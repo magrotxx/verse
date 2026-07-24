@@ -27,17 +27,7 @@ struct RootPillView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            pillContainer
-                .opacity(isPopup ? 0 : 1)
-                .allowsHitTesting(!isPopup)
-            // The card is MOUNTED whenever a track is loaded and animated with
-            // plain state-driven modifiers (scale about the pill's spot +
-            // fade). No SwiftUI transitions: they proved unreliable here
-            // (honored only on branch roots, wrong pivot spaces) — modifiers
-            // animate deterministically in both directions.
-            if model.now != nil {
-                popupContainer
-            }
+            shell
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(Motion.spring(0.42, 0.86), value: model.uiState)
@@ -45,49 +35,72 @@ struct RootPillView: View {
 
     private var isPopup: Bool { model.uiState == .popup }
 
-    // MARK: - Pill (anchored container)
+    // MARK: - The morphing shell (container transform)
 
-    private var pillContainer: some View {
-        pillBody
-            .scaleEffect(bounceScale)
-            // The WHOLE capsule frame is grabbable: without an explicit content
-            // shape SwiftUI hit-tests only drawn pixels, and the mostly
-            // transparent idle ball leaves just the tiny note glyph draggable.
-            .contentShape(Rectangle())
-            // contextMenu sits INSIDE the tap/drag gestures: applied outside,
-            // its wrapper view is known to swallow drags on macOS. Right-click
-            // still reaches it — the gestures below only claim left-button.
-            .contextMenu { PillContextMenu(model: model) }
-            // Exclusive tap so a double-click NEVER also fires the single-click
-            // (which would open-then-close the popup). Drag is simultaneous so
-            // it coexists with taps; 2pt threshold keeps taps from jittering.
-            // Clicks are inert while no track is loaded (idle ball) — revision A.
-            .gesture(
-                ExclusiveGesture(
-                    TapGesture(count: 2).onEnded {
-                        guard model.now != nil else { return }
-                        model.togglePlayPause()
-                        triggerBounce()
-                    },
-                    TapGesture(count: 1).onEnded { expand() }
-                )
+    /// ONE glass shape shared by both states: its frame literally animates
+    /// between the pill capsule and the popup card (position, size, corner
+    /// radius, shadow all spring together on `uiState`), while the two
+    /// contents crossfade inside and the clip progressively reveals the card.
+    /// This is what makes expand read as "the pill itself grows".
+    private var shell: some View {
+        let pillFrame = model.pillLayout.pillFrame(
+            anchor: model.pillAnchor, mode: model.pillAnchorMode, width: model.pillWidth
+        )
+        let popupRect = model.pillLayout.popupRect(pillFrame: pillFrame, visible: model.pillVisibleRect)
+        let frame = isPopup ? popupRect : pillFrame
+        let radius: CGFloat = isPopup ? 20 : model.pillLayout.pillHeight / 2
+
+        return ZStack(alignment: .topLeading) {
+            pillBody
+                .opacity(isPopup ? 0 : 1)
+                .allowsHitTesting(!isPopup)
+            if model.now != nil {
+                PopupView(model: model, active: isPopup)
+                    .opacity(isPopup ? 1 : 0)
+                    .allowsHitTesting(isPopup)
+            }
+        }
+        .frame(width: frame.width, height: frame.height, alignment: .topLeading)
+        .background(
+            ZStack {
+                GlassBackground()
+                Color.black.opacity(model.pillOpacity)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(isPopup ? 0.4 : 0.25),
+                radius: isPopup ? 20 : 10, y: isPopup ? 8 : 3)
+        // First-run caption rides OUTSIDE the clip (overlays after clipShape
+        // are not clipped), hanging just below the demo pill.
+        .overlay(alignment: .top) {
+            if model.isFirstRunDemo && model.now == nil {
+                Text("Drag me somewhere comfy — click to open")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .fixedSize()
+                    .offset(y: frame.height + 10)
+            }
+        }
+        .scaleEffect(bounceScale)
+        .contentShape(Rectangle())
+        .contextMenu { PillContextMenu(model: model) }
+        .gesture(
+            ExclusiveGesture(
+                TapGesture(count: 2).onEnded {
+                    guard model.uiState == .pill, model.now != nil else { return }
+                    model.togglePlayPause()
+                    triggerBounce()
+                },
+                TapGesture(count: 1).onEnded { expand() }
             )
-            // Dragging is APPKIT-level (PassThroughHostingView) — SwiftUI's
-            // DragGesture proved unreliable under this tap/contextMenu stack.
-            // Direct anchored placement: the offset is continuous math of
-            // anchor/mode/width, and offset + width share one spring, so the
-            // anchored edge stays put through width changes with no
-            // (unanimatable) Alignment flip — this is what keeps size
-            // transitions smooth. No anchor spring while a drag is live: the
-            // pill must track the pointer 1:1.
-            .offset(
-                x: PillLayout.leftEdge(
-                    anchorX: model.pillAnchor.x, mode: model.pillAnchorMode, width: model.pillWidth
-                ),
-                y: model.pillAnchor.y
-            )
-            .animation(model.isDraggingPill ? nil : Motion.spring(0.45, 0.92), value: model.pillAnchor)
-            .animation(Motion.spring(0.45, 0.92), value: model.pillWidth)
+        )
+        .offset(x: frame.minX, y: frame.minY)
+        .animation(model.isDraggingPill ? nil : Motion.spring(0.45, 0.92), value: model.pillAnchor)
+        .animation(Motion.spring(0.45, 0.92), value: model.pillWidth)
     }
 
     /// The pill itself, with a TimelineView mounted only when needed:
@@ -111,33 +124,6 @@ struct RootPillView: View {
                 )
             }
         }
-    }
-
-    // MARK: - Popup
-
-    private var popupContainer: some View {
-        let pillFrame = model.pillLayout.pillFrame(
-            anchor: model.pillAnchor, mode: model.pillAnchorMode, width: model.pillWidth
-        )
-        let rect = model.pillLayout.popupRect(pillFrame: pillFrame, visible: model.pillVisibleRect)
-        return PopupView(model: model, active: isPopup)
-            // Scale pivots INSIDE the offset, about the pill's unit point in
-            // the card's own bounds — the card inflates out of the pill and
-            // exhales back into it. Reduce Motion: fade only (scale pinned).
-            .scaleEffect(isPopup || Motion.reduce ? 1 : 0.06,
-                         anchor: growthAnchor(pillFrame: pillFrame, rect: rect))
-            .opacity(isPopup ? 1 : 0)
-            .allowsHitTesting(isPopup)
-            .offset(x: rect.minX, y: rect.minY)
-    }
-
-    /// The pill's center as a unit point of the card — the inflate's pivot.
-    private func growthAnchor(pillFrame: CGRect, rect: CGRect) -> UnitPoint {
-        guard rect.width > 0, rect.height > 0 else { return .top }
-        return UnitPoint(
-            x: min(max((pillFrame.midX - rect.minX) / rect.width, 0), 1),
-            y: min(max((pillFrame.midY - rect.minY) / rect.height, 0), 1)
-        )
     }
 
     // MARK: - Actions
@@ -179,33 +165,7 @@ private struct DemoPill: View {
         )
         .padding(.horizontal, 16)
         .frame(width: model.pillWidth, height: model.pillLayout.pillHeight)
-        .background(
-            ZStack {
-                GlassBackground()
-                Color.black.opacity(0.6)
-            }
-        )
-        .clipShape(Capsule(style: .continuous))
-        .overlay(
-            Capsule(style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
-        // One-time caption below the pill; fades out 8s in (time-driven).
-        .overlay(alignment: .top) {
-            Text("Drag me somewhere comfy — click to open")
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.6))
-                .fixedSize()
-                .offset(y: model.pillLayout.pillHeight + 10)
-                .opacity(captionOpacity)
-        }
-    }
-
-    /// 1 for the first 8s of the demo, then a quick fade to 0.
-    private var captionOpacity: Double {
-        let elapsed = wall - model.demoStartWall
-        if elapsed < 8 { return 1 }
-        return max(0, 1 - (elapsed - 8) / 0.6)
+        // Chrome + the "drag me" caption live on RootPillView's shell.
     }
 }
 

@@ -66,6 +66,11 @@ final class AppModel: ObservableObject {
     @Published var syncOffset: Double {
         didSet { UserDefaults.standard.set(syncOffset, forKey: "verse.syncOffset") }
     }
+    /// Opacity of the black wash over the glass (pill AND popup share the
+    /// shell chrome): lower = more transparent/glassy, higher = more solid.
+    @Published var pillOpacity: Double {
+        didSet { UserDefaults.standard.set(pillOpacity, forKey: "verse.pillOpacity") }
+    }
 
     // MARK: - Geometry (set by the panel controller at launch / on screen change)
     /// Font used to MEASURE pill text (chunks, titles) — must match the pill's
@@ -183,6 +188,7 @@ final class AppModel: ObservableObject {
         instrumentalStyle = InstrumentalStyle(
             rawValue: defaults.string(forKey: "verse.instrumental") ?? "") ?? .breathingDots
         syncOffset = defaults.double(forKey: "verse.syncOffset")
+        pillOpacity = defaults.object(forKey: "verse.pillOpacity") as? Double ?? 0.6
 
         // Restore the saved anchor ("mode,x,y"). didSet does NOT fire for these
         // initial assignments, so `hasStoredPillAnchor` is set by hand — the

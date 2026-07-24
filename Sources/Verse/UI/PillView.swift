@@ -85,20 +85,13 @@ struct PillView: View {
     var body: some View {
         let display = currentDisplay()
         let isBall = display == .ball
+        // Content only — the glass chrome lives on RootPillView's morphing
+        // shell so pill and popup are ONE continuous shape.
         return contentView(display)
             .frame(width: model.pillWidth, height: model.pillLayout.pillHeight)
-            .background(glass)
-            .clipShape(Capsule(style: .continuous))
-            .overlay(
-                Capsule(style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
             // Paused: dim to 60%, perfectly still (breathing pulse removed —
             // user decision 2026-07-25).
             .opacity(model.isPaused && !isBall ? 0.6 : 1)
-            // Dynamic width: near-critically-damped spring between per-line
-            // targets (matches the anchor spring in RootPillView so offset and
-            // width read as one motion).
             .animation(Motion.spring(0.45, 0.92), value: model.pillWidth)
             // Width recompute is a per-line event: fires when the displayed
             // chunk/state changes, never per frame.
@@ -124,15 +117,6 @@ struct PillView: View {
         case .echo(let chunk): return "echo|\(chunk.id)"
         case .instrumental(let tiny): return tiny ? "notes-tiny" : "notes"
         case .blank: return "blank"
-        }
-    }
-
-    // MARK: - Glass (revision A: neutral black, no album tint)
-
-    private var glass: some View {
-        ZStack {
-            GlassBackground()
-            Color.black.opacity(0.6)
         }
     }
 

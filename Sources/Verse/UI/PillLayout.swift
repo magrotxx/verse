@@ -36,7 +36,9 @@ enum PillAnchorMode: String {
 /// spaces agree that `X` grows rightward.
 struct PillLayout {
     var pillHeight: CGFloat = 30
-    var popupSize = CGSize(width: 400, height: 248)
+    /// Wide enough that typical lyric lines render whole (fit-to-width only
+    /// kicks in for genuinely long lines).
+    var popupSize = CGSize(width: 560, height: 264)
     var edgeMargin: CGFloat = 12
 
     /// Idle-ball diameter — equals `pillHeight`, so the capsule reads as a circle.
