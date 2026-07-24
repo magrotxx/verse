@@ -47,6 +47,9 @@ final class AppModel: ObservableObject {
     @Published var pinned = false
     @Published var browsing = false          // scroll-to-browse full list in vibe mode
     @Published var scrubbing = false
+    /// User chose "Hide until next song": the pill stays gone while this track
+    /// keeps playing, and reappears when the track changes. Reset in `apply()`.
+    @Published var hiddenUntilTrackChange = false
 
     // MARK: - Settings (persisted)
     @Published var theme: LyricTheme {
@@ -171,6 +174,7 @@ final class AppModel: ObservableObject {
             content = .none
             compactChunks = []
             pausedLyricPosition = nil
+            hiddenUntilTrackChange = false
             if uiState != .hidden { uiState = .hidden }
             return
         }
@@ -178,7 +182,15 @@ final class AppModel: ObservableObject {
         let trackChanged = state.trackKey != currentTrackKey
         let artworkArrived = now?.artwork == nil && state.artwork != nil
         now = state
-        if uiState == .hidden { uiState = .pill }
+
+        // A new song clears a "hide until next song" request.
+        if trackChanged { hiddenUntilTrackChange = false }
+        // Show the pill unless the user hid it for the rest of this track.
+        if hiddenUntilTrackChange {
+            if uiState != .hidden { uiState = .hidden }
+        } else if uiState == .hidden {
+            uiState = .pill
+        }
 
         // Freeze lyric time on pause (capture once), release on resume. Capturing
         // here — after the coordinator has pushed the paused position into the
@@ -245,6 +257,18 @@ final class AppModel: ObservableObject {
     func togglePlayPause() { coordinator.togglePlayPause() }
     func nextTrack() { coordinator.nextTrack() }
     func previousTrack() { coordinator.previousTrack() }
+
+    /// Hide the pill until the current track ends / changes (context-menu item).
+    func hideUntilNextTrack() {
+        hiddenUntilTrackChange = true
+        uiState = .hidden
+    }
+
+    /// Right-click "Lyric timing" nudges — clamped to the same ±1s the settings
+    /// slider uses so the two controls always agree.
+    func adjustSyncOffset(by delta: Double) {
+        syncOffset = min(1, max(-1, syncOffset + delta))
+    }
 
     func seek(to seconds: TimeInterval) {
         guard let duration = now?.duration, duration > 0 else { return }
