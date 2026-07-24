@@ -66,8 +66,14 @@ final class AppModel: ObservableObject {
     }
 
     // MARK: - Geometry (set by the panel controller at launch / on screen change)
-    var wingTextWidth: CGFloat = 240
-    let compactFont = NSFont.systemFont(ofSize: 11, weight: .medium)
+    /// Font used to MEASURE chunks — must match the pill's lyric render size
+    /// (`LyricRenderStyle.pill`, 13pt medium) or chunks would over/underflow.
+    let pillFont = NSFont.systemFont(ofSize: 13, weight: .medium)
+
+    /// Text budget for chunking: the pill width minus 16pt of horizontal padding
+    /// on each side. Chunks are sized to fit this so the fixed-width pill never
+    /// resizes per line.
+    var pillTextWidth: CGFloat { pillWidth - 32 }
 
     /// Pure geometry helpers (pill/popup size, clamping, coordinate flips).
     let pillLayout = PillLayout()
@@ -83,7 +89,7 @@ final class AppModel: ObservableObject {
     }
 
     /// Fixed capsule width while a song plays (no per-line resizing). Set by the
-    /// panel controller from the screen; refined to the text budget in Task 6.
+    /// panel controller from the screen; chunks fit within `pillTextWidth`.
     @Published var pillWidth: CGFloat = 240
 
     /// The current screen's visible area (excludes menu bar + dock) expressed in
@@ -104,6 +110,11 @@ final class AppModel: ObservableObject {
     private var lyricsTask: Task<Void, Never>?
     private var currentTrackKey: String?
     private var browseTimer: Timer?
+
+    /// Lyric time frozen at the moment playback paused, so the wipe/spotlight
+    /// stops mid-word instead of drifting on the interpolating clock. `nil`
+    /// while playing. See `lyricPosition()`.
+    private var pausedLyricPosition: TimeInterval?
 
     var openSettings: (@MainActor () -> Void)?
 
@@ -159,6 +170,7 @@ final class AppModel: ObservableObject {
             currentTrackKey = nil
             content = .none
             compactChunks = []
+            pausedLyricPosition = nil
             if uiState != .hidden { uiState = .hidden }
             return
         }
@@ -167,6 +179,15 @@ final class AppModel: ObservableObject {
         let artworkArrived = now?.artwork == nil && state.artwork != nil
         now = state
         if uiState == .hidden { uiState = .pill }
+
+        // Freeze lyric time on pause (capture once), release on resume. Capturing
+        // here — after the coordinator has pushed the paused position into the
+        // clock — pins the wipe to exactly where the vocal stopped.
+        if state.isPlaying {
+            pausedLyricPosition = nil
+        } else if pausedLyricPosition == nil {
+            pausedLyricPosition = clock.position()
+        }
 
         if trackChanged {
             currentTrackKey = state.trackKey
@@ -193,8 +214,8 @@ final class AppModel: ObservableObject {
             if case .synced(let timeline) = result {
                 self.compactChunks = LyricChunker.chunks(
                     for: timeline,
-                    maxWidth: self.wingTextWidth - 8,
-                    font: self.compactFont
+                    maxWidth: self.pillTextWidth,
+                    font: self.pillFont
                 )
             } else {
                 self.compactChunks = []
@@ -212,8 +233,12 @@ final class AppModel: ObservableObject {
     func position() -> TimeInterval { clock.position() }
 
     /// Playback position shifted by the user's lyric-timing offset — use this
-    /// for anything lyric-synced; use `position()` for the scrubber.
-    func lyricPosition() -> TimeInterval { clock.position() + syncOffset }
+    /// for anything lyric-synced; use `position()` for the scrubber. Returns the
+    /// frozen pause position while paused so the theme animation holds mid-word.
+    func lyricPosition() -> TimeInterval { (pausedLyricPosition ?? clock.position()) + syncOffset }
+
+    /// True when a song is loaded but paused (distinct from stopped/`nil`).
+    var isPaused: Bool { now != nil && now?.isPlaying == false }
 
     // MARK: - Transport
 
@@ -223,7 +248,10 @@ final class AppModel: ObservableObject {
 
     func seek(to seconds: TimeInterval) {
         guard let duration = now?.duration, duration > 0 else { return }
-        coordinator.seek(to: min(max(seconds, 0), duration))
+        let clamped = min(max(seconds, 0), duration)
+        coordinator.seek(to: clamped)
+        // Seeking while paused must move the frozen lyric with the scrubber.
+        if pausedLyricPosition != nil { pausedLyricPosition = clamped }
     }
 
     /// Re-anchor the playback clock against ground truth right now, instead

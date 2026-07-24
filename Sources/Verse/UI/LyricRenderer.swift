@@ -18,6 +18,18 @@ struct LyricRenderStyle {
         )
     }
 
+    /// Compact glass-pill line: ~13pt, palette-tinted (bright on dim), same four
+    /// theme animations as everywhere else.
+    static func pill(_ palette: Palette) -> LyricRenderStyle {
+        LyricRenderStyle(
+            font: .system(size: 13, weight: .medium),
+            bright: palette.bright,
+            dim: palette.bright.opacity(0.30),
+            accent: palette.accent,
+            isCompact: true
+        )
+    }
+
     static func vibe(_ palette: Palette) -> LyricRenderStyle {
         LyricRenderStyle(
             font: .system(size: 21.5, weight: .semibold, design: .serif),

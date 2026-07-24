@@ -344,34 +344,3 @@ struct VibeModeView: View {
         .buttonStyle(.plain)
     }
 }
-
-/// Apple Music-style breathing dots for instrumental breaks.
-struct BreathingDots: View {
-    let color: Color
-    let t: TimeInterval
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(color)
-                    .frame(width: 7, height: 7)
-                    .opacity(opacity(for: i))
-                    .scaleEffect(scale(for: i))
-            }
-        }
-    }
-
-    private func pulse(for index: Int) -> Double {
-        let phase = sin((t * .pi * 2.0 / 2.4) - Double(index) * 0.7)
-        return (phase + 1.0) / 2.0
-    }
-
-    private func opacity(for index: Int) -> Double {
-        0.35 + 0.45 * pulse(for: index)
-    }
-
-    private func scale(for index: Int) -> Double {
-        0.85 + 0.2 * pulse(for: index)
-    }
-}

@@ -101,8 +101,8 @@ final class NotchPanelController {
         self.model = model
         let layout = NotchLayout.compute(statusItemMinX: statusItemMinX)
         self.layout = layout
-        // Chunk width budget: each wing loses 16pt outer + 12pt inner padding.
-        model.wingTextWidth = layout.leftWingWidth - 28
+        // (Notch chunk-width plumbing removed — chunks now size to the pill's
+        // text budget. This whole controller is dead code, deleted in Task 8.)
 
         panel = NotchPanel(
             contentRect: NSRect(origin: .zero, size: layout.panelSize),
