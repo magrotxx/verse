@@ -50,9 +50,17 @@ struct RootPillView: View {
     private var pillContainer: some View {
         pillBody
             .scaleEffect(bounceScale)
+            // The WHOLE capsule frame is grabbable: without an explicit content
+            // shape SwiftUI hit-tests only drawn pixels, and the mostly
+            // transparent idle ball leaves just the tiny note glyph draggable.
+            .contentShape(Rectangle())
+            // contextMenu sits INSIDE the tap/drag gestures: applied outside,
+            // its wrapper view is known to swallow drags on macOS. Right-click
+            // still reaches it — the gestures below only claim left-button.
+            .contextMenu { PillContextMenu(model: model) }
             // Exclusive tap so a double-click NEVER also fires the single-click
             // (which would open-then-close the popup). Drag is simultaneous so
-            // it coexists with taps; 3pt threshold keeps taps from jittering.
+            // it coexists with taps; 2pt threshold keeps taps from jittering.
             // Clicks are inert while no track is loaded (idle ball) — revision A.
             .gesture(
                 ExclusiveGesture(
@@ -65,7 +73,6 @@ struct RootPillView: View {
                 )
             )
             .simultaneousGesture(dragGesture)
-            .contextMenu { PillContextMenu(model: model) }
             // Direct anchored placement: the offset is continuous math of
             // anchor/mode/width, and offset + width share one spring, so the
             // anchored edge stays put through width changes with no
@@ -139,7 +146,7 @@ struct RootPillView: View {
     /// reclassified from the pill center's screen third and the anchor point is
     /// converted so the pill does not move (same left edge, new anchor edge).
     private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 3, coordinateSpace: .global)
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
             .onChanged { value in
                 let base = dragBase ?? (model.pillAnchor, model.pillAnchorMode)
                 if dragBase == nil { dragBase = base }
