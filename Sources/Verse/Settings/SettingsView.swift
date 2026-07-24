@@ -140,7 +140,7 @@ struct ThemePreview: View {
             font: .system(size: 15, weight: .semibold, design: .serif),
             bright: palette.bright,
             dim: palette.bright.opacity(0.32),
-            accent: palette.accent,
+            accent: LyricLineRenderer.brandAmber,
             isCompact: false
         )
     }

@@ -286,7 +286,7 @@ struct PopupView: View {
                         .fill(model.palette.bright.opacity(0.12))
                         .frame(height: barHeight)
                     Capsule()
-                        .fill(model.palette.accent)
+                        .fill(LyricLineRenderer.brandAmber)
                         .frame(width: max(geo.size.width * progress, barHeight), height: barHeight)
                 }
                 .frame(height: geo.size.height)
@@ -340,7 +340,7 @@ struct PopupView: View {
                 Button(action: { model.pinned.toggle() }) {
                     Image(systemName: model.pinned ? "pin.fill" : "pin")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(model.pinned ? model.palette.accent : model.palette.muted)
+                        .foregroundStyle(model.pinned ? LyricLineRenderer.brandAmber : model.palette.muted)
                         .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
                 }

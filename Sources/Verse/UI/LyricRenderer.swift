@@ -15,7 +15,7 @@ struct LyricRenderStyle {
             font: .system(size: 13, weight: .medium),
             bright: palette.bright,
             dim: palette.bright.opacity(0.30),
-            accent: palette.accent,
+            accent: LyricLineRenderer.brandAmber,
             isCompact: true
         )
     }
@@ -27,7 +27,7 @@ struct LyricRenderStyle {
             font: .system(size: size, weight: .semibold, design: .serif),
             bright: palette.bright,
             dim: palette.bright.opacity(0.32),
-            accent: palette.accent,
+            accent: LyricLineRenderer.brandAmber,
             isCompact: false
         )
     }
@@ -103,7 +103,21 @@ struct LyricLineRenderer: View {
         return ZStack {
             lineText.foregroundStyle(style.dim)
             lineText
-                .foregroundStyle(Self.brandAmber)
+                // Gold at the sweep's leading edge, trailing to white behind
+                // it — the website hero's exact look. The gradient rides the
+                // sweep (`mapped`): text sung a while ago reads white, the
+                // word being sung right now glows amber.
+                .foregroundStyle(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white, location: 0),
+                            .init(color: .white, location: max(mapped - 0.30, 0)),
+                            .init(color: Self.brandAmber, location: max(mapped - 0.02, 0.001)),
+                            .init(color: Self.brandAmber, location: 1)
+                        ],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                )
                 .mask(
                     LinearGradient(
                         stops: [
@@ -126,7 +140,8 @@ struct LyricLineRenderer: View {
         return wordHStack { i, word in
             Text(word.text)
                 .font(style.font)
-                .foregroundStyle(i == active ? style.bright : style.dim)
+                // The one lit word carries the brand accent.
+                .foregroundStyle(i == active ? style.accent : style.dim)
                 .scaleEffect(i == active ? 1.06 : 1.0)
                 .animation(.spring(response: 0.22, dampingFraction: 0.7), value: active == i)
         }
@@ -138,14 +153,18 @@ struct LyricLineRenderer: View {
     // spacing and centering never shift as words appear.
 
     private var typeOn: some View {
-        wordHStack { _, word in
+        let active = activeWordIndex
+        return wordHStack { i, word in
             let revealed = t >= word.start
             Text(word.text)
                 .font(style.font)
-                .foregroundStyle(style.bright)
+                // The word being sung lands in the brand accent, settling to
+                // bright once its moment passes.
+                .foregroundStyle(i == active ? style.accent : style.bright)
                 .opacity(revealed ? 1 : 0)
                 .offset(y: revealed ? 0 : 5)
                 .animation(.easeOut(duration: 0.28), value: revealed)
+                .animation(.easeOut(duration: 0.35), value: active == i)
         }
     }
 
