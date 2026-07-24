@@ -20,7 +20,12 @@ final class PillPanel: NSPanel {
 /// drive the model. Presses in the popup state are never armed, so the popup's
 /// own SwiftUI gestures (scrubber, seek) are untouched.
 final class PassThroughHostingView<Content: View>: NSHostingView<Content> {
-    /// Interactive shape in this view's AppKit (bottom-left) coordinates.
+    /// Interactive shape in this view's OWN coordinates. NSHostingView is
+    /// FLIPPED (verified empirically 2026-07-25: a click on the pill arrives
+    /// with y measured from the TOP), so this rect is in panel top-left space
+    /// — the same space `PillLayout.pillFrame`/`popupRect` produce, no
+    /// conversion. (Using AppKit bottom-left rects here was the bug that made
+    /// every pill click/drag fall through to the desktop.)
     var interactiveRect: @MainActor () -> CGRect = { .zero }
 
     /// True while the pill (not the popup) is showing — only then may a press
@@ -44,6 +49,8 @@ final class PassThroughHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {
+        // convert(from: nil) respects isFlipped — viewPoint is top-left space,
+        // matching interactiveRect.
         let viewPoint = convert(event.locationInWindow, from: nil)
         if isPillState(), interactiveRect().contains(viewPoint) {
             pressWindowPoint = event.locationInWindow
@@ -218,30 +225,31 @@ final class PillPanelController {
         )
     }
 
-    /// Interactive shape in AppKit (bottom-left) hosting-view coordinates.
+    /// Interactive shape in the hosting view's FLIPPED (panel top-left)
+    /// coordinates — pill/popup frames are used directly, no conversion.
     /// The pill (or idle ball) is always present — revision A removed `.hidden`.
     private func interactiveRect(for model: AppModel) -> CGRect {
-        let frame = pillPanelFrame()
-        let pillRect = PillLayout.hitRect(
-            topLeft: frame.origin, size: frame.size, panelHeight: panel.frame.height
-        )
         switch model.uiState {
         case .pill:
-            return pillRect
+            return pillPanelFrame()
         case .popup:
-            return pillRect.union(popupHitRect())
+            return pillPanelFrame().union(popupPanelRect())
         }
     }
 
-    /// Popup rect in AppKit (bottom-left) hosting-view coordinates.
-    private func popupHitRect() -> CGRect {
-        let popup = layout.popupRect(pillFrame: pillPanelFrame(), visible: model.pillVisibleRect)
-        return PillLayout.hitRect(topLeft: popup.origin, size: popup.size, panelHeight: panel.frame.height)
+    /// Popup rect in panel (top-left) space.
+    private func popupPanelRect() -> CGRect {
+        layout.popupRect(pillFrame: pillPanelFrame(), visible: model.pillVisibleRect)
     }
 
-    /// Popup rect in SCREEN coordinates (for hit-testing raw mouse events).
+    /// Popup rect in SCREEN (AppKit bottom-left) coordinates — the one place
+    /// that genuinely needs the flip, because `NSEvent.mouseLocation` (used by
+    /// the click-outside monitors) reports global bottom-left points.
     private func popupScreenRect() -> CGRect {
-        popupHitRect().offsetBy(dx: panel.frame.minX, dy: panel.frame.minY)
+        let popup = popupPanelRect()
+        return PillLayout.hitRect(
+            topLeft: popup.origin, size: popup.size, panelHeight: panel.frame.height
+        ).offsetBy(dx: panel.frame.minX, dy: panel.frame.minY)
     }
 
     // MARK: - Dismissal / browse monitors (pattern: the old scroll monitor)

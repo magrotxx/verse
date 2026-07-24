@@ -150,11 +150,14 @@ struct PillLayout {
         )
     }
 
-    // MARK: - Panel space → hit-test (AppKit) space
+    // MARK: - Panel space → AppKit bottom-left space
 
-    /// A panel-space top-left rect (`topLeft` + `size`) expressed in the AppKit
-    /// (bottom-left) coordinates that `PassThroughHostingView.hitTest(_:)`
-    /// receives. `panelHeight` is the hosting view's height (`= frame.height`).
+    /// A panel-space top-left rect (`topLeft` + `size`) expressed in AppKit
+    /// bottom-left coordinates. NOT for view hit-testing — NSHostingView is
+    /// flipped, so `hitTest` points arrive in panel top-left space already
+    /// (verified empirically 2026-07-25). This flip is for GLOBAL screen
+    /// points (`NSEvent.mouseLocation`, window frames): add the panel's
+    /// screen origin after flipping. `panelHeight` = the panel's height.
     ///
     /// Only `Y` flips: the shape's TOP edge is `topLeft.y` down from the panel
     /// top, so its BOTTOM edge is `panelHeight - topLeft.y - size.height` up
