@@ -1,11 +1,10 @@
 import SwiftUI
 import AppKit
 
-/// Root of the floating-pill hierarchy. Owns the morph namespace and positions
-/// the pill / popup inside the full-screen panel. Pill and popup are mutually
-/// exclusive and share the `"currentLyric"` matched-geometry id, so toggling
-/// `uiState` (with the container's spring) morphs the pill's lyric into the
-/// popup's current line and back.
+/// Root of the floating-pill hierarchy: positions the pill and the popup card
+/// inside the full-screen panel. Expansion is state-driven — the always-mounted
+/// card scales/fades about the pill's spot when `uiState` flips (no SwiftUI
+/// transitions, no matched geometry: both proved unreliable/streaky here).
 ///
 /// ## Side parking (2026-07-25, supersedes revision A's thirds rule)
 ///
@@ -23,25 +22,28 @@ import AppKit
 struct RootPillView: View {
     @ObservedObject var model: AppModel
 
-    @Namespace private var morph
-
     /// Quick press-bounce on double-click (1 → 0.94 → 1 spring).
     @State private var bounceScale: CGFloat = 1
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            switch model.uiState {
-            case .pill:
-                pillContainer.transition(.opacity)
-            case .popup:
-                // Its transition lives on PopupView INSIDE the offset — see
-                // popupContainer.
+            pillContainer
+                .opacity(isPopup ? 0 : 1)
+                .allowsHitTesting(!isPopup)
+            // The card is MOUNTED whenever a track is loaded and animated with
+            // plain state-driven modifiers (scale about the pill's spot +
+            // fade). No SwiftUI transitions: they proved unreliable here
+            // (honored only on branch roots, wrong pivot spaces) — modifiers
+            // animate deterministically in both directions.
+            if model.now != nil {
                 popupContainer
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(Motion.spring(0.42, 0.86), value: model.uiState)
     }
+
+    private var isPopup: Bool { model.uiState == .popup }
 
     // MARK: - Pill (anchored container)
 
@@ -99,12 +101,11 @@ struct RootPillView: View {
                 DemoPill(model: model, wall: context.date.timeIntervalSinceReferenceDate)
             }
         } else if model.showsIdleBall {
-            PillView(model: model, morph: morph, t: 0, wall: 0)
+            PillView(model: model, t: 0, wall: 0)
         } else {
             TimelineView(.animation(minimumInterval: model.frameInterval)) { context in
                 PillView(
                     model: model,
-                    morph: morph,
                     t: model.lyricPosition(),
                     wall: context.date.timeIntervalSinceReferenceDate
                 )
@@ -119,24 +120,24 @@ struct RootPillView: View {
             anchor: model.pillAnchor, mode: model.pillAnchorMode, width: model.pillWidth
         )
         let rect = model.pillLayout.popupRect(pillFrame: pillFrame, visible: model.pillVisibleRect)
-        return PopupView(model: model, morph: morph)
-            // Scale BEFORE the offset: the anchor is a unit point of the
-            // card's OWN bounds, so it inflates in place around the pill's
-            // spot and exhales back into it. (Scaling outside the offset
-            // pivots about the un-translated layout frame at the panel's
-            // top-left — the card appeared to fly in from the screen edge.)
-            .transition(popupTransition(pillFrame: pillFrame, rect: rect))
+        return PopupView(model: model, active: isPopup)
+            // Scale pivots INSIDE the offset, about the pill's unit point in
+            // the card's own bounds — the card inflates out of the pill and
+            // exhales back into it. Reduce Motion: fade only (scale pinned).
+            .scaleEffect(isPopup || Motion.reduce ? 1 : 0.06,
+                         anchor: growthAnchor(pillFrame: pillFrame, rect: rect))
+            .opacity(isPopup ? 1 : 0)
+            .allowsHitTesting(isPopup)
             .offset(x: rect.minX, y: rect.minY)
     }
 
-    /// Inflate-from-the-pill transition; fade-only under Reduce Motion.
-    private func popupTransition(pillFrame: CGRect, rect: CGRect) -> AnyTransition {
-        guard !Motion.reduce, rect.width > 0, rect.height > 0 else { return .opacity }
-        let anchor = UnitPoint(
+    /// The pill's center as a unit point of the card — the inflate's pivot.
+    private func growthAnchor(pillFrame: CGRect, rect: CGRect) -> UnitPoint {
+        guard rect.width > 0, rect.height > 0 else { return .top }
+        return UnitPoint(
             x: min(max((pillFrame.midX - rect.minX) / rect.width, 0), 1),
             y: min(max((pillFrame.midY - rect.minY) / rect.height, 0), 1)
         )
-        return .scale(scale: 0.06, anchor: anchor).combined(with: .opacity)
     }
 
     // MARK: - Actions

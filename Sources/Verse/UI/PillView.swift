@@ -79,7 +79,6 @@ enum PillDisplay: Equatable {
 /// which must keep moving even though `t` freezes while paused.
 struct PillView: View {
     @ObservedObject var model: AppModel
-    var morph: Namespace.ID
     let t: TimeInterval       // lyric/playback time (frozen when paused)
     let wall: TimeInterval    // live wall-clock seconds
 
@@ -176,7 +175,6 @@ struct PillView: View {
         )
         .opacity(chunkFade(chunk))
         .padding(.horizontal, 16)
-        .matchedGeometryEffect(id: "currentLyric", in: morph, isSource: model.uiState != .popup)
     }
 
     /// Echo (bracketed ad-lib) line: italic serif at 75% size / 55% brightness,
@@ -189,7 +187,6 @@ struct PillView: View {
             .truncationMode(.tail)
             .opacity(chunkFade(chunk))
             .padding(.horizontal, 16)
-            .matchedGeometryEffect(id: "currentLyric", in: morph, isSource: model.uiState != .popup)
     }
 
     // MARK: - Time-driven crossfade

@@ -3,11 +3,12 @@ import SwiftUI
 /// The glass karaoke card the pill unfurls into on click. Ported from the old
 /// VibeModeView (3-line follow, scroll-to-browse, scrubber, transport,
 /// click-to-seek) onto a translucent glass card with a fitted current-line font
-/// and cleaned title. The current-line container is the `matchedGeometryEffect`
-/// destination so the pill's lyric morphs into it.
+/// and cleaned title. The card stays mounted while a track is loaded (its
+/// scale/fade is driven by RootPillView); `active` gates the per-frame
+/// TimelineView content so a hidden card costs nothing per frame.
 struct PopupView: View {
     @ObservedObject var model: AppModel
-    var morph: Namespace.ID
+    var active: Bool
 
     @State private var scrubberHover = false
     @State private var dragPosition: TimeInterval?
@@ -15,16 +16,22 @@ struct PopupView: View {
     private var size: CGSize { model.pillLayout.popupSize }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: model.frameInterval, paused: false)) { _ in
-            VStack(spacing: 8) {
-                header
-                lyricsArea(t: model.lyricPosition())
-                    .frame(maxHeight: .infinity)
-                scrubber(t: model.position())
-                controls
+        Group {
+            if active {
+                TimelineView(.animation(minimumInterval: model.frameInterval, paused: false)) { _ in
+                    VStack(spacing: 8) {
+                        header
+                        lyricsArea(t: model.lyricPosition())
+                            .frame(maxHeight: .infinity)
+                        scrubber(t: model.position())
+                        controls
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+            } else {
+                Color.clear
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
         }
         .frame(width: size.width, height: size.height)
         .background(glass)
@@ -142,7 +149,6 @@ struct PopupView: View {
             // Morph destination: the pill's lyric flies to this anchor.
             Color.clear
                 .frame(height: 34)
-                .matchedGeometryEffect(id: "currentLyric", in: morph, isSource: model.uiState == .popup)
 
             if inBreak {
                 instrumentalIndicator(t: t, nextStart: timeline.nextLineStart(after: t))
