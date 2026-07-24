@@ -133,7 +133,7 @@ struct VibeModeView: View {
             // Anchor for the compact↔expanded morph
             Color.clear
                 .frame(height: 34)
-                .matchedGeometryEffect(id: "currentLyric", in: morph, isSource: model.uiState == .expanded)
+                .matchedGeometryEffect(id: "currentLyric", in: morph, isSource: model.uiState == .popup)
 
             if inBreak {
                 instrumentalIndicator(t: t, nextStart: timeline.nextLineStart(after: t))

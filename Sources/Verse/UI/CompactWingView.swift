@@ -38,7 +38,7 @@ struct CompactWingView: View {
             }
             // Stable container carries the compact↔expanded morph, with an
             // explicit source so only one side of the morph is source at once.
-            .matchedGeometryEffect(id: "currentLyric", in: morph, isSource: model.uiState != .expanded)
+            .matchedGeometryEffect(id: "currentLyric", in: morph, isSource: model.uiState != .popup)
         }
     }
 

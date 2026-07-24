@@ -144,7 +144,7 @@ final class NotchPanelController {
         // Scroll inside the expanded panel → browse the full lyrics list.
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak model] event in
             MainActor.assumeIsolated {
-                if let model, model.uiState == .expanded, event.window is NotchPanel {
+                if let model, model.uiState == .popup, event.window is NotchPanel {
                     if model.browsing {
                         model.restartBrowseTimer()
                     } else {
@@ -169,20 +169,20 @@ final class NotchPanelController {
     }
 
     /// Visible shape in hosting-view coordinates (origin bottom-left).
-    private static func interactiveRect(for state: NotchUIState, layout: NotchLayout) -> CGRect {
+    private static func interactiveRect(for state: PillUIState, layout: NotchLayout) -> CGRect {
         let panelSize = layout.panelSize
         switch state {
         case .hidden:
             // Keep the physical notch area hoverable? No — invisible when idle.
             return .zero
-        case .compact:
+        case .pill:
             return CGRect(
                 x: (panelSize.width - layout.compactWidth) / 2 + layout.compactOffset,
                 y: panelSize.height - layout.notchHeight,
                 width: layout.compactWidth,
                 height: layout.notchHeight
             )
-        case .expanded:
+        case .popup:
             return CGRect(
                 x: (panelSize.width - layout.expandedSize.width) / 2,
                 y: panelSize.height - layout.expandedSize.height,

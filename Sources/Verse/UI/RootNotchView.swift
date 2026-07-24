@@ -55,15 +55,15 @@ struct RootNotchView: View {
     @State private var expandWork: DispatchWorkItem?
     @State private var collapseWork: DispatchWorkItem?
 
-    private var isExpanded: Bool { model.uiState == .expanded }
+    private var isExpanded: Bool { model.uiState == .popup }
 
     private var shapeSize: CGSize {
         switch model.uiState {
         case .hidden:
             return CGSize(width: layout.notchWidth, height: layout.notchHeight)
-        case .compact:
+        case .pill:
             return CGSize(width: layout.compactWidth, height: layout.notchHeight)
-        case .expanded:
+        case .popup:
             return layout.expandedSize
         }
     }
@@ -125,11 +125,11 @@ struct RootNotchView: View {
 
     private func hoverEntered() {
         collapseWork?.cancel(); collapseWork = nil
-        guard model.uiState == .compact else { return }
+        guard model.uiState == .pill else { return }
         expandWork?.cancel()
         let work = DispatchWorkItem { [weak model] in
             Task { @MainActor in
-                if let model, model.uiState == .compact { model.uiState = .expanded }
+                if let model, model.uiState == .pill { model.uiState = .popup }
             }
         }
         expandWork = work
@@ -139,13 +139,13 @@ struct RootNotchView: View {
 
     private func hoverExited() {
         expandWork?.cancel(); expandWork = nil
-        guard model.uiState == .expanded, !model.pinned, !model.scrubbing else { return }
+        guard model.uiState == .popup, !model.pinned, !model.scrubbing else { return }
         collapseWork?.cancel()
         let work = DispatchWorkItem { [weak model] in
             Task { @MainActor in
                 guard let model else { return }
-                if model.uiState == .expanded, !model.pinned, !model.scrubbing {
-                    model.uiState = .compact
+                if model.uiState == .popup, !model.pinned, !model.scrubbing {
+                    model.uiState = .pill
                     model.exitBrowse()
                 }
             }

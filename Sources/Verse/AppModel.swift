@@ -32,7 +32,9 @@ enum InstrumentalStyle: String, CaseIterable, Identifiable {
     }
 }
 
-enum NotchUIState { case hidden, compact, expanded }
+/// The pill's three visual states (renamed from the old notch `NotchUIState`;
+/// `.compact` → `.pill`, `.expanded` → `.popup`).
+enum PillUIState { case hidden, pill, popup }
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -41,7 +43,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var content: LyricsContent = .none
     @Published private(set) var compactChunks: [LyricChunk] = []
     @Published private(set) var palette: Palette = .fallback
-    @Published var uiState: NotchUIState = .hidden
+    @Published var uiState: PillUIState = .hidden
     @Published var pinned = false
     @Published var browsing = false          // scroll-to-browse full list in vibe mode
     @Published var scrubbing = false
@@ -63,9 +65,36 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(syncOffset, forKey: "verse.syncOffset") }
     }
 
-    // MARK: - Geometry (set once by the panel controller at launch)
+    // MARK: - Geometry (set by the panel controller at launch / on screen change)
     var wingTextWidth: CGFloat = 240
     let compactFont = NSFont.systemFont(ofSize: 11, weight: .medium)
+
+    /// Pure geometry helpers (pill/popup size, clamping, coordinate flips).
+    let pillLayout = PillLayout()
+
+    /// The pill's TOP-LEFT corner in SwiftUI panel space (top-left origin,
+    /// Y grows down). Persisted so the pill returns to where the user dropped
+    /// it. See `PillLayout` for the space definitions.
+    @Published var pillOrigin: CGPoint {
+        didSet {
+            hasStoredPillOrigin = true
+            UserDefaults.standard.set("\(pillOrigin.x),\(pillOrigin.y)", forKey: "verse.pillOrigin")
+        }
+    }
+
+    /// Fixed capsule width while a song plays (no per-line resizing). Set by the
+    /// panel controller from the screen; refined to the text budget in Task 6.
+    @Published var pillWidth: CGFloat = 240
+
+    /// The current screen's visible area (excludes menu bar + dock) expressed in
+    /// panel space. Written by the panel controller; read for live drag-clamping
+    /// and popup placement. Not `@Published` — every mutation of `pillOrigin`
+    /// that depends on it is applied imperatively right after it changes.
+    var pillVisibleRect: CGRect = .zero
+
+    /// False until the very first launch persists a position; lets the panel
+    /// controller drop the pill at its default spot only once.
+    private(set) var hasStoredPillOrigin = false
 
     // MARK: - Engine
     let clock = PlaybackClock()
@@ -85,6 +114,28 @@ final class AppModel: ObservableObject {
         instrumentalStyle = InstrumentalStyle(
             rawValue: defaults.string(forKey: "verse.instrumental") ?? "") ?? .breathingDots
         syncOffset = defaults.double(forKey: "verse.syncOffset")
+
+        // Restore the pill's saved position ("x,y"). didSet does NOT fire for
+        // these initial assignments, so `hasStoredPillOrigin` is set by hand —
+        // the panel controller uses it to place the pill at its default spot
+        // only when nothing was persisted yet.
+        if let saved = defaults.string(forKey: "verse.pillOrigin") {
+            let parts = saved.split(separator: ",").compactMap { Double($0) }
+            if parts.count == 2 {
+                pillOrigin = CGPoint(x: parts[0], y: parts[1])
+                hasStoredPillOrigin = true
+            } else {
+                pillOrigin = .zero
+            }
+        } else {
+            pillOrigin = .zero
+        }
+    }
+
+    /// Clamp `pillOrigin` so the whole pill stays inside `visible` (panel space)
+    /// with the layout's edge margin. Assigning `pillOrigin` persists it.
+    func clampPillOrigin(to visible: CGRect) {
+        pillOrigin = pillLayout.clampedOrigin(pillOrigin, pillWidth: pillWidth, visible: visible)
     }
 
     // MARK: - Lifecycle
@@ -115,7 +166,7 @@ final class AppModel: ObservableObject {
         let trackChanged = state.trackKey != currentTrackKey
         let artworkArrived = now?.artwork == nil && state.artwork != nil
         now = state
-        if uiState == .hidden { uiState = .compact }
+        if uiState == .hidden { uiState = .pill }
 
         if trackChanged {
             currentTrackKey = state.trackKey
@@ -190,7 +241,7 @@ final class AppModel: ObservableObject {
     // MARK: - Browse mode (scroll inside the panel → full lyrics list)
 
     func enterBrowse() {
-        guard uiState == .expanded, timeline != nil else { return }
+        guard uiState == .popup, timeline != nil else { return }
         browsing = true
         restartBrowseTimer()
     }
@@ -218,7 +269,7 @@ final class AppModel: ObservableObject {
                 guard let self, self.pinned else { return }
                 if Self.frontmostSpaceIsFullscreen() {
                     self.pinned = false
-                    self.uiState = self.now == nil ? .hidden : .compact
+                    self.uiState = self.now == nil ? .hidden : .pill
                     self.exitBrowse()
                 }
             }

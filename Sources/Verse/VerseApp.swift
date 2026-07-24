@@ -19,7 +19,7 @@ enum VerseMain {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var model: AppModel!
-    private var panelController: NotchPanelController!
+    private var panelController: PillPanelController!
     private var statusItemController: StatusItemController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -27,10 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.model = model
 
         statusItemController = StatusItemController(model: model)
-        panelController = NotchPanelController(
-            model: model,
-            statusItemMinX: statusItemController.buttonScreenMinX()
-        )
+        panelController = PillPanelController(model: model)
 
         model.start()
     }
