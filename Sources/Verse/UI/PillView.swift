@@ -202,10 +202,11 @@ struct RisingNotes: View {
                 .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(.white.opacity(0.55))
         } else {
+            // Tight spread so the trio fits the 30pt ball.
             ZStack {
-                note(index: 0, x: -9, size: 8)
-                note(index: 1, x: 0.5, size: 9.5)
-                note(index: 2, x: 9, size: 8)
+                note(index: 0, x: -6, size: 7)
+                note(index: 1, x: 0.5, size: 8.5)
+                note(index: 2, x: 6, size: 7)
             }
         }
     }

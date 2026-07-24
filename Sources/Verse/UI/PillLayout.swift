@@ -44,8 +44,9 @@ struct PillLayout {
     /// Idle-ball diameter — equals `pillHeight`, so the capsule reads as a circle.
     static let ballDiameter: CGFloat = 30
 
-    /// Capsule width during instrumental breaks (contracted, rising note glyphs).
-    var instrumentalWidth: CGFloat = 44
+    /// Instrumental breaks contract all the way to the BALL (user decision
+    /// 2026-07-25): a circle with rising note glyphs inside.
+    var instrumentalWidth: CGFloat = 30
 
     /// The widest the pill may grow on a given screen — `min(38% of width, 460)`.
     /// Lines wider than this (minus padding) are chunked.

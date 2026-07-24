@@ -188,7 +188,7 @@ final class AppModel: ObservableObject {
         instrumentalStyle = InstrumentalStyle(
             rawValue: defaults.string(forKey: "verse.instrumental") ?? "") ?? .breathingDots
         syncOffset = defaults.double(forKey: "verse.syncOffset")
-        pillOpacity = defaults.object(forKey: "verse.pillOpacity") as? Double ?? 0.6
+        pillOpacity = defaults.object(forKey: "verse.pillOpacity") as? Double ?? 0.35
 
         // Restore the saved anchor ("mode,x,y"). didSet does NOT fire for these
         // initial assignments, so `hasStoredPillAnchor` is set by hand — the

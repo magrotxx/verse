@@ -31,6 +31,9 @@ final class PassThroughHostingView<Content: View>: NSHostingView<Content> {
     /// True while the pill (not the popup) is showing — only then may a press
     /// arm the drag tracker.
     var isPillState: @MainActor () -> Bool = { false }
+    /// While the popup is open, presses inside THIS rect (the header's note
+    /// glyph — the card's grab handle) also arm the drag tracker.
+    var popupGrabRect: @MainActor () -> CGRect = { .zero }
     var onPillDragBegan: @MainActor () -> Void = {}
     /// Total translation since mouse-down, in panel TOP-LEFT space.
     var onPillDragMoved: @MainActor (CGSize) -> Void = { _ in }
@@ -52,7 +55,10 @@ final class PassThroughHostingView<Content: View>: NSHostingView<Content> {
         // convert(from: nil) respects isFlipped — viewPoint is top-left space,
         // matching interactiveRect.
         let viewPoint = convert(event.locationInWindow, from: nil)
-        if isPillState(), interactiveRect().contains(viewPoint) {
+        let armed = isPillState()
+            ? interactiveRect().contains(viewPoint)
+            : popupGrabRect().contains(viewPoint)
+        if armed {
             pressWindowPoint = event.locationInWindow
             dragging = false
         }
@@ -140,6 +146,13 @@ final class PillPanelController {
         // is captured at drag start; every move applies the TOTAL translation
         // to it, so there is no per-event accumulation drift.
         hosting.isPillState = { [weak model] in model?.uiState == .pill }
+        // Grab handle while expanded: a generous zone around the header's
+        // note glyph (top-right of the card, panel top-left space).
+        hosting.popupGrabRect = { [weak self, weak model] in
+            guard let self, let model, model.uiState == .popup else { return .zero }
+            let popup = self.popupPanelRect()
+            return CGRect(x: popup.maxX - 54, y: popup.minY + 4, width: 50, height: 42)
+        }
         hosting.onPillDragBegan = { [weak self, weak model] in
             guard let self, let model else { return }
             self.dragAnchorBase = model.pillAnchor

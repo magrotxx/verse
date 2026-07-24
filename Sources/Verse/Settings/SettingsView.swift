@@ -53,7 +53,7 @@ struct SettingsView: View {
                 HStack {
                     Text("Transparency")
                     Spacer()
-                    Slider(value: $model.pillOpacity, in: 0.25...0.85, step: 0.05)
+                    Slider(value: $model.pillOpacity, in: 0.15...0.85, step: 0.05)
                         .frame(width: 150)
                     Text(String(format: "%.0f%%", model.pillOpacity * 100))
                         .font(.system(size: 10).monospacedDigit())
