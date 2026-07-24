@@ -3,6 +3,41 @@
 Decided with the user on 2026-07-23. Supersedes the notch-docked design in
 CLAUDE.md (CLAUDE.md must be updated as part of implementation).
 
+## Design revision A (2026-07-24) — SUPERSEDES conflicting lines below
+
+User-decided refinements after seeing the direction. Where this section
+conflicts with anything later in the spec, THIS section wins:
+
+1. **Material:** the pill is translucent BLACK (neutral dark glass at ~55-65%
+   opacity), no album-hue wash on the pill, no album-accent glow. Shadow is
+   black, soft and light (e.g. opacity ~0.25, radius ~10, y 3) — the
+   Raycast-like "techie" look. Album color survives ONLY in lyric text tints
+   inside the pill and popup content.
+2. **Dynamic width:** the pill's width follows the current line — it expands
+   and contracts per lyric with a spring, sized to the text plus padding,
+   clamped to [ball diameter, pillMaxWidth]. The old "fixed width while a
+   song plays" rule is DEAD. Chunking applies only to lines wider than
+   pillMaxWidth. While paused, width freezes with the frozen lyric.
+3. **Idle ball:** when NO music is playing the pill does not disappear — it
+   contracts into a small circular ball (~30pt) showing a translucent
+   music-note SF Symbol (~40% white). The ball is draggable but clicks are
+   inert (no popup, no action). Clicking works only while a song is loaded.
+   The first-run demo/tooltip still applies, anchored to the ball.
+4. **Edge-anchored growth:** width changes respect where the user parked it.
+   If the ball/pill sits in the right third of the screen, the RIGHT edge is
+   the anchor and growth extends leftward; left third → left edge anchored,
+   growth extends rightward; middle third → centered symmetric growth. The
+   persisted position is the anchor point (anchor edge x + top y), so the
+   anchored edge never moves as lines change.
+5. **Instrumental animation:** replace breathing dots in the pill (they read
+   as "loading"). During instrumental breaks the pill contracts toward ball
+   size and 2–3 small music-note glyphs rise out of it — drifting upward
+   ~8-10pt while fading in/out, staggered on a ~2.2s loop, time-driven (not
+   SwiftUI transitions). The popup's 3-line view may keep its existing
+   indicator styles (settings picker unchanged).
+6. **Pre-first-line / no-lyrics states** keep showing "♪ Title — Artist" in
+   the pill (unchanged), at whatever width that text needs per rule 2.
+
 ## Problem
 
 "When I'm working I sometimes miss the lyrics of the song that's playing. I
