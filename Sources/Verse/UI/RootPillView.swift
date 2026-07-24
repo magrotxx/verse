@@ -34,11 +34,33 @@ struct RootPillView: View {
             case .pill:
                 pillContainer.transition(.opacity)
             case .popup:
-                popupContainer.transition(.opacity)
+                popupContainer.transition(popupTransition)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .animation(Motion.spring(0.45, 0.85), value: model.uiState)
+        .animation(Motion.spring(0.42, 0.86), value: model.uiState)
+    }
+
+    /// The card INFLATES from the pill's spot and exhales back into it —
+    /// a scale anchored at the pill's position within the popup, under the
+    /// shared lyric-line morph. Fade-only when Reduce Motion is on.
+    private var popupTransition: AnyTransition {
+        guard !Motion.reduce else { return .opacity }
+        return .scale(scale: 0.06, anchor: popupGrowthAnchor).combined(with: .opacity)
+    }
+
+    /// The pill's center expressed as a unit point within the popup's rect —
+    /// the visual origin the card grows out of.
+    private var popupGrowthAnchor: UnitPoint {
+        let pillFrame = model.pillLayout.pillFrame(
+            anchor: model.pillAnchor, mode: model.pillAnchorMode, width: model.pillWidth
+        )
+        let rect = model.pillLayout.popupRect(pillFrame: pillFrame, visible: model.pillVisibleRect)
+        guard rect.width > 0, rect.height > 0 else { return .top }
+        return UnitPoint(
+            x: min(max((pillFrame.midX - rect.minX) / rect.width, 0), 1),
+            y: min(max((pillFrame.midY - rect.minY) / rect.height, 0), 1)
+        )
     }
 
     // MARK: - Pill (anchored container)
