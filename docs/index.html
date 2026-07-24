@@ -162,12 +162,69 @@
           echo-fade var(--fd, 19s) ease-in-out infinite;
       }
 
-      .echo-1  { top: 140px;  left: -2%;  font-size: 46px; --o: 0.035; --dd: 44s; --fd: 21s; }
-      .echo-2  { top: 330px;  right: -4%; font-size: 30px; --o: 0.055; --dd: 56s; --fd: 16s; animation-delay: -18s, -7s; }
-      .echo-3  { top: 560px;  left: 3%;   font-size: 24px; --o: 0.05;  --dd: 48s; --fd: 24s; animation-delay: -30s, -12s; }
-      .echo-4  { top: 820px;  right: 1%;  font-size: 54px; --o: 0.03;  --dd: 62s; --fd: 28s; animation-delay: -8s, -20s; }
-      .echo-5  { top: 1080px; left: -3%;  font-size: 34px; --o: 0.045; --dd: 52s; --fd: 18s; animation-delay: -40s, -3s; }
-      .echo-6  { top: 1320px; right: 6%;  font-size: 26px; --o: 0.06;  --dd: 46s; --fd: 22s; animation-delay: -22s, -15s; }
+      .echo-1 {
+        top: 140px;
+        left: -2%;
+        font-size: 46px;
+        --o: 0.035;
+        --dd: 44s;
+        --fd: 21s;
+      }
+      .echo-2 {
+        top: 330px;
+        right: -4%;
+        font-size: 30px;
+        --o: 0.055;
+        --dd: 56s;
+        --fd: 16s;
+        animation-delay:
+          -18s,
+          -7s;
+      }
+      .echo-3 {
+        top: 560px;
+        left: 3%;
+        font-size: 24px;
+        --o: 0.05;
+        --dd: 48s;
+        --fd: 24s;
+        animation-delay:
+          -30s,
+          -12s;
+      }
+      .echo-4 {
+        top: 820px;
+        right: 1%;
+        font-size: 54px;
+        --o: 0.03;
+        --dd: 62s;
+        --fd: 28s;
+        animation-delay:
+          -8s,
+          -20s;
+      }
+      .echo-5 {
+        top: 1080px;
+        left: -3%;
+        font-size: 34px;
+        --o: 0.045;
+        --dd: 52s;
+        --fd: 18s;
+        animation-delay:
+          -40s,
+          -3s;
+      }
+      .echo-6 {
+        top: 1320px;
+        right: 6%;
+        font-size: 26px;
+        --o: 0.06;
+        --dd: 46s;
+        --fd: 22s;
+        animation-delay:
+          -22s,
+          -15s;
+      }
 
       @keyframes echo-drift {
         from {
@@ -198,11 +255,35 @@
         will-change: transform, opacity;
       }
 
-      .note-1 { left: 8%;  font-size: 22px; --nd: 24s; }
-      .note-2 { left: 22%; font-size: 16px; --nd: 19s; animation-delay: -9s; }
-      .note-3 { left: 55%; font-size: 26px; --nd: 28s; animation-delay: -17s; }
-      .note-4 { left: 74%; font-size: 18px; --nd: 21s; animation-delay: -5s; }
-      .note-5 { left: 90%; font-size: 23px; --nd: 26s; animation-delay: -13s; }
+      .note-1 {
+        left: 8%;
+        font-size: 22px;
+        --nd: 24s;
+      }
+      .note-2 {
+        left: 22%;
+        font-size: 16px;
+        --nd: 19s;
+        animation-delay: -9s;
+      }
+      .note-3 {
+        left: 55%;
+        font-size: 26px;
+        --nd: 28s;
+        animation-delay: -17s;
+      }
+      .note-4 {
+        left: 74%;
+        font-size: 18px;
+        --nd: 21s;
+        animation-delay: -5s;
+      }
+      .note-5 {
+        left: 90%;
+        font-size: 23px;
+        --nd: 26s;
+        animation-delay: -13s;
+      }
 
       @keyframes note-rise {
         0% {
@@ -731,10 +812,14 @@
       <section class="hero">
         <div class="pill-stage">
           <div class="stage-glow"></div>
-          <div class="idle-ball" title="Idle: Verse rests as a tiny ball">&#9834;</div>
+          <div class="idle-ball" title="Idle: Verse rests as a tiny ball">
+            &#9834;
+          </div>
           <div class="stage-arrow" aria-hidden="true">&rarr;</div>
           <div class="pill">
-            <span class="pill-lyric" id="pill-lyric">and the city hums along in gold</span>
+            <span class="pill-lyric" id="pill-lyric"
+              >and the city hums along in gold</span
+            >
           </div>
         </div>
 
@@ -744,15 +829,15 @@
         <p class="tagline">Verse — lyrics in a pill.</p>
         <p class="desc">
           A slim, draggable glass pill that floats above everything and sings
-          the current line of whatever's playing. Click it and it unfurls into
-          a karaoke card. Calm when idle, tiny when playing, beautiful when
-          you want it.
+          the current line of whatever's playing. Click it and it unfurls into a
+          karaoke card. Calm when idle, tiny when playing, beautiful when you
+          want it.
         </p>
 
         <div class="cta">
           <a
             class="btn-download"
-            href="https://github.com/OWNER/verse/releases/latest/download/Verse.zip"
+            href="https://github.com/cpt-nem0/verse/releases/latest/download/Verse.zip"
           >
             <svg
               width="16"
@@ -780,7 +865,7 @@
           </a>
           <div class="cta-meta">
             macOS 14+ · every Mac · free<br />
-            <a href="https://github.com/OWNER/verse/releases/latest"
+            <a href="https://github.com/cpt-nem0/verse/releases/latest"
               >Release notes</a
             >
             <div class="gatekeeper-note">
@@ -803,8 +888,8 @@
         </div>
         <div class="strip-item">
           <strong>A card when you want more</strong>
-          One click unfurls a glass karaoke card — three lines, a scrubber,
-          and transport controls.
+          One click unfurls a glass karaoke card — three lines, a scrubber, and
+          transport controls.
         </div>
       </section>
 
@@ -822,8 +907,8 @@
           <div class="feature reveal">
             <h3>Click to unfurl</h3>
             <p>
-              The pill opens into a glass karaoke card: three lyric lines,
-              click any line to seek, plus a scrubber and transport controls.
+              The pill opens into a glass karaoke card: three lyric lines, click
+              any line to seek, plus a scrubber and transport controls.
             </p>
           </div>
           <div class="feature reveal">
@@ -837,8 +922,8 @@
           <div class="feature reveal">
             <h3>Four animation themes</h3>
             <p>
-              From expressive type-on and word spotlight to a minimal
-              underline tracer — pick your energy.
+              From expressive type-on and word spotlight to a minimal underline
+              tracer — pick your energy.
             </p>
           </div>
           <div class="feature reveal">
@@ -848,8 +933,8 @@
           <div class="feature reveal">
             <h3>Time-synced, cached offline</h3>
             <p>
-              Lyrics come from LRCLIB's free, open catalog, matched to the
-              exact track — and saved locally, so repeat plays work without a
+              Lyrics come from LRCLIB's free, open catalog, matched to the exact
+              track — and saved locally, so repeat plays work without a
               connection.
             </p>
           </div>
@@ -862,7 +947,7 @@
         </div>
         <div>Free &amp; open source · MIT</div>
         <div class="links">
-          <a href="https://github.com/OWNER/verse">GitHub</a>
+          <a href="https://github.com/cpt-nem0/verse">GitHub</a>
           <a href="https://lrclib.net">Lyrics by LRCLIB</a>
         </div>
       </footer>
@@ -871,7 +956,7 @@
     <script>
       (function () {
         var reduced = window.matchMedia(
-          "(prefers-reduced-motion: reduce)"
+          "(prefers-reduced-motion: reduce)",
         ).matches;
 
         /* --- karaoke cycle in the pill: swap the lyric at each wipe loop --- */
@@ -902,7 +987,7 @@
                 }
               });
             },
-            { rootMargin: "0px 0px -8% 0px", threshold: 0.1 }
+            { rootMargin: "0px 0px -8% 0px", threshold: 0.1 },
           );
           document.querySelectorAll(".reveal").forEach(function (el) {
             io.observe(el);
