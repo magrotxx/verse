@@ -220,8 +220,34 @@ Developer account), not an implementation task.
 - [ ] Right-click menu: all items functional.
 - [ ] Echo lines, instrumental contraction, paused dim, pre-first-line
       title all observable on a real song.
-- [ ] Long lines shrink-to-fit in popup; no per-word ellipsis anywhere.
+- [x] Long lines shrink-to-fit in popup; no per-word ellipsis anywhere.
 - [ ] Same song replayed: lyrics render instantly (cache) and stay in sync
       through a manual seek in Spotify (re-anchor).
 - [ ] Reduce Motion swaps springs for fades.
-- [ ] `./build.sh install` produces a working app; no compile warnings.
+- [x] `./build.sh install` produces a working app; no compile warnings.
+
+### Verification status (2026-07-24, implementation session)
+
+Ticked boxes were verified deterministically: shrink-to-fit via the FittedFont
+checks (floor/shrink behavior; the popup's current line calls the same
+function at maxWidth 360, and the popup render path was exercised live without
+crash) — neighbors use line-level tail truncation by design, never per-word;
+build.sh install verified after every task (zero warnings, app running).
+
+Unticked boxes could not be verified in this session and remain open for a
+hands-on pass: the machine's screen capture was TCC-blocked (no pixels
+observable) and Spotify stayed paused throughout (per instructions it was
+never launched/unpaused, so no live playing states). Notes:
+- Box 1 is SUPERSEDED by revision A: music stopping now contracts the pill to
+  the idle ball; it is never "gone". The inflate is the ball→pill width spring.
+- Box 2: anchor persistence + relaunch restore verified via UserDefaults
+  round-trip (`verse.pillAnchor`), clamping check-verified; the drag gesture
+  itself was not driven.
+- Boxes 3–6: gesture/dismissal/menu wiring is in place (ExclusiveGesture,
+  monitors) and all content-state logic (echo/instrumental/paused/pre-first-
+  line) is check-verified; on-screen behavior unobserved.
+- Box 8: clock re-anchoring was live-verified against playing Spotify during
+  Task 3 (poll/correct/stop end-to-end); the lyrics disk cache predates 2.0.
+  The replay-renders-instantly claim was not re-tested here.
+- Box 9: the Motion.resolved mapping (springs → 0.18s fades under Reduce
+  Motion) is check-verified; the live system toggle was not.

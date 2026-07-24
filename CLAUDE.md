@@ -1,97 +1,176 @@
-# Verse — lyrics in your notch
+# Verse — lyrics in a floating pill
 
-A macOS menu bar app that displays time-synced lyrics for the currently playing song, anchored to the MacBook notch. Design philosophy: invisible when idle, tiny when playing, beautiful when you want it. Text never moves — only light moves through it.
+A macOS app that displays time-synced lyrics for the currently playing song in
+a slim, draggable glass pill that is always on top and never in the way. Click
+the pill and it unfurls into a translucent karaoke popup. Design philosophy:
+calm when idle, tiny when playing, beautiful when you want it.
 
-This file is the complete design spec, finalized in a design session. Follow it closely; the visual decisions here are locked unless the user says otherwise.
+**Design authority:** `docs/superpowers/specs/2026-07-23-verse-pill-revamp-design.md`
+(including its "Design revision A" section, which supersedes conflicting lines).
+This file summarizes the product; when they disagree, the spec wins.
 
 ## Product summary
 
-- **Name:** Verse. Tagline: "Verse — lyrics in your notch."
-- **Platform:** macOS (Apple Silicon MacBooks with notch as primary target; notchless fallback mode planned later, not v1).
-- **Core loop:** song plays → notch grows "wings" showing the current lyric line (compact state) → hover expands into "vibe mode," a full karaoke panel tinted with the album art color → mouse leaves, it springs back.
+- **Name:** Verse. Tagline: "Verse — lyrics in a pill."
+- **Platform:** macOS 14+ (any Mac — no notch dependency; the old notch-docked
+  mode was removed in 2.0 and lives only in git history).
+- **Core loop:** song plays → the idle ball inflates into the lyric pill →
+  the current line animates through it per the active theme → click opens the
+  glass popup (3-line karaoke, scrubber, transport) → Esc/click-outside exhales
+  it back into the pill → music stops → the pill contracts to the ball.
 
-## The two states
+## The pill
 
-### State 1 — Compact ("wings")
+One line of text in a capsule, ~13pt, horizontal padding 16pt, height 30pt.
 
-A borderless black extension on either side of the physical notch so notch + app read as one continuous shape.
+- **Material (revision A):** translucent BLACK glass — `NSVisualEffectView`
+  (hudWindow, behind-window blending) under a neutral black wash (~0.6), a
+  hairline white border (0.08), and a soft black shadow (0.25 / radius 10 / y 3).
+  NO album-hue wash and NO accent glow on the material: the album palette
+  colors only the lyric text (and popup content tints). Raycast-like, techie.
+- **Dynamic width (revision A):** the capsule hugs the current line —
+  `clamp(textWidth + 32, 30, min(38% of screen width, 460))`, spring-animated
+  per line change (never per frame; the model measures and publishes the
+  target). Lines wider than the max are split into sequential chunks at word
+  boundaries with time-driven crossfades. Paused freezes the width with the
+  frozen lyric.
+- **Idle ball (revision A):** when NO music plays the pill does not disappear —
+  it contracts into a 30pt circular ball with a translucent `music.note` glyph
+  (white 40%). Draggable; left/double clicks are inert until a track loads;
+  right-click menu always works. "Hide until next song" also contracts to the
+  ball until the track changes. No TimelineView is mounted while idle (CPU ~0).
+- **Edge-anchored growth (revision A):** width changes respect where the user
+  parked the pill. The pill center's screen third at drag-end picks the anchor:
+  left third → left edge fixed (grows rightward), right third → right edge
+  fixed (grows leftward), middle → centered symmetric. The persisted position
+  (`verse.pillAnchor`, "mode,x,y") is the anchor point, so the anchored edge
+  never moves as lines change. Clamped to `NSScreen.visibleFrame` (never under
+  the menu bar or dock).
+- **States:** pre-first-line / plain / no lyrics → "♪ Title — Artist" dimmed
+  (title cleaned of feat/remaster noise); singing → the active theme's
+  animation; echo lines (text fully inside `(…)`/`[…]`) → italic serif at 75%
+  size / 55% brightness, soft time-fade, no karaoke animation; instrumental
+  break >3s → capsule contracts (~44pt; ~30pt past 15s) with 2–3 small
+  music-note glyphs rising ~9pt and fading on a staggered ~2.2s loop
+  (revision A — replaces breathing dots in the pill); paused → wipe freezes
+  mid-word, pill dims to 60% with a ~3s breathing pulse.
+- **Gestures:** drag anywhere (3pt threshold, manual global-space drag,
+  position persists); click → popup; double-click → play/pause with a press
+  bounce (ExclusiveGesture — double-click never opens the popup); right-click →
+  context menu (Theme submenu, Lyric timing ±0.1/±0.5/reset, Hide until next
+  song, Settings…, Quit).
 
-- The lyric reads across BOTH wings like a book spread: the current chunk fills the left wing (trailing-aligned, flowing into the notch), and the next chunk continues on the right wing (leading-aligned). Chunks advance in pairs within a line, ~11pt, animated per the active theme (see Themes). No album art in compact — it lives in the expanded header. The notch gap keeps 12pt of black padding on each side of the physical notch.
-- **Fixed wing width** regardless of line length — never resize per line (seasick). Wings are EQUAL width on both sides, sized so the compact bar matches the expanded panel's width — hover-expand grows straight down with zero horizontal movement. Capped at ~40% of the space between the notch and the menu bar status items/clock, measured at launch. Art dot sits snug against the notch (trailing-aligned in its wing).
-- Lines longer than the wing: do NOT marquee-scroll. Break into chunks at natural word boundaries, crossfade between chunks, each chunk gets its own animation pass.
-- Instrumental breaks: fade the lyric out; the album art dot stays with a slow breathing pulse. Never show a stale line.
-- Idle (nothing playing): the app is fully invisible. Notch untouched.
+## The popup
 
-### State 2 — Expanded ("vibe mode")
+A 400×248 glass card anchored to the pill: grows downward from the pill's top
+when the pill is in the screen's top half, upward from its bottom otherwise;
+horizontally centered on the pill, clamped to the visible frame. The pill's
+lyric line morphs into the popup's current line (`matchedGeometryEffect`, one
+shared element — never a crossfade of two).
 
-On hover, the compact wing melts open into a panel (~500–520px wide) that appears to grow out of the notch, with large bottom corner radius (~24–26px).
-
-- **Background:** album art's dominant color darkened to ~12% lightness. Dark enough to blend with the pure-black physical notch, tinted enough to feel alive. All other colors in the panel derive from this hue (bright tint for current lyric, ~35% opacity mid-tone for neighbor lines, muted tint for secondary UI).
-- **Header row:** album art (~40px, rounded 10px, clickable → opens the source player), track title + "Artist · Album", small source badge (e.g. Spotify icon + name) on the right.
-- **Lyrics area:** exactly 3 lines in serif (New York / system serif).
-  - Previous line above: small (~14pt), italic, ~35% opacity.
-  - Current line center: large (~21–22pt), animated per the active theme.
-  - Next line below: small, italic, ~35% opacity.
-  - Clamp every line to one row (ellipsis) so panel height never jumps.
-  - **Click any line to seek** playback to that line's timestamp. This is a signature feature — must feel instant.
-  - Scroll inside the panel → temporarily switches to a full-lyrics list view; snaps back to 3-line follow mode after 4s of no scrolling.
-- **Scrubber:** thin (3px) progress bar, thickens on hover, draggable. Tabular-numeral timestamps on both ends.
-- **Control row:** transport (prev / play-pause / next) centered. Left corner: theme/settings icon. Right corner: pin icon.
-- **Pin:** keeps the panel open (for singing along / cooking). Pinned mode auto-collapses when a fullscreen app or video starts.
-- **Collapse:** ~600ms after mouse leaves (unless pinned), soft spring back into the compact wing.
-- **Line transitions:** lines slide up with a spring on each timestamp.
-
-### Signature transition
-
-The compact lyric line must MORPH into the vibe-mode current line on expand — shared element via `matchedGeometryEffect`: position moves, font grows and changes sans → serif. This single shared element is what makes the app feel liquid. Do not fade-out/fade-in two separate views.
+- **Material:** same neutral dark glass as the pill (blur + black 0.6, radius
+  20, hairline border, soft shadow). Album color appears only in content tints.
+- **Header:** 36px album art (radius 9, click → open the source player),
+  cleaned title (13.5 semibold, bright tint), artist (11, muted), icon-only
+  source glyph at right.
+- **Lyrics:** exactly 3 serif lines — previous/next small italic ~35% opacity,
+  current line large (base 21.5) with the theme animation and fit-to-width
+  scaling (FittedFont, floor 60% — never per-word ellipsis). Echo current line
+  renders italic 75%/55% with no animation. Click any line to seek (instant).
+  Scroll → full-lyrics browse list, snaps back after 4s idle.
+- **Scrubber:** 3px, thickens on hover, draggable, tabular timestamps.
+- **Transport row:** prev / play-pause / next centered; settings glyph left;
+  pin right (pin keeps the popup open on outside clicks; pinned auto-collapses
+  when a fullscreen app starts).
+- **Dismiss:** click outside (unless pinned) or Esc → exhale morph back into
+  the pill. Opening the popup re-syncs the playback clock immediately.
 
 ## The four themes
 
-One theme setting drives the word/line animation in BOTH states (compact and expanded). Same animation language everywhere.
+One theme setting drives the line animation in BOTH the pill and the popup.
+Ordered expressive → minimal (this ordering IS the settings UI — a segmented
+control with a live animated preview):
 
-Ordered from most expressive to most minimal (this ordering IS the settings UI — a segmented control from "expressive" to "minimal" with a live animated preview in the settings window):
+1. **Type-on** (expressive): words fade/rise in as sung; full line laid out
+   invisibly first so centering never shifts.
+2. **Word spotlight:** all words muted; exactly one bright word at a time with
+   a slight scale pop (~1.06).
+3. **Light wipe** (DEFAULT): whole line at ~32% brightness; a wave of full
+   brightness sweeps left→right synced to the vocal (animated gradient mask).
+4. **Underline tracer** (minimal): text fully lit and static; a hairline
+   accent dash slides beneath the line. Zero motion in the text itself.
 
-1. **Type-on** (expressive): the line starts empty; each word fades/rises in (small translateY + opacity) at the moment it's sung; the whole line dissolves before the next. CRITICAL: lay out the FULL line invisibly first so spacing is fixed, then reveal words in place — never let the line's centering shift as words appear.
-2. **Word spotlight:** all words rendered muted/grey; the currently sung word turns white (full-bright tint in vibe mode) with a slight scale pop (~1.06). Only the current word is bright — inverse highlight, exactly one bright word at a time.
-3. **Light wipe** (DEFAULT): entire line visible at ~30–35% brightness; a wave of full brightness sweeps left-to-right through the text synced to the vocal. Implement as an animated gradient text mask.
-4. **Underline tracer** (minimal): text stays fully lit and static; a 1.5–2px hairline in the album accent color slides beneath the line tracking playback. Zero motion in the text itself.
+### Timestamp fallback (all themes)
 
-### Timestamp fallback (applies to all themes)
+LRCLIB usually provides line-level timestamps only. Word timings are
+synthesized by distributing the line duration across words weighted by length —
+sweeps read constant-speed with line-level data and snap to word boundaries
+when real word-level data exists. Never disable a theme for missing word data.
 
-- LRCLIB usually provides line-level timestamps only; word-level is rare.
-- **Wipe:** with line-level data, sweep at constant speed across the line's duration. With word-level data, snap the sweep to word boundaries. Same visual either way.
-- **Spotlight / type-on:** with line-level data only, distribute word timings evenly across the line duration, weighted by word length. Must look intentional; never disable a theme because word data is missing.
-- **Tracer:** constant-speed slide across line duration; snap to words when available.
+## Engineering rules
 
-## Open decisions (ask the user before implementing these two)
-
-1. Hover-expand behavior: instant open vs ~150ms hover-intent delay (recommended: 150ms delay to avoid accidental triggers).
-2. Instrumental-break display in expanded view: breathing three-dot indicator (recommended, Apple Music style) vs countdown to next line vs enlarged album art.
+- **Animation:** springs everywhere, nothing over ~450ms. Content crossfades
+  inside `TimelineView` must be playback-time-driven, NOT SwiftUI transitions
+  (`.id`/`.transition` swaps strand outgoing views mid-transition in per-frame
+  re-renders — see `PillView.chunkFade`). State-change animations (uiState
+  morph, width springs) are regular SwiftUI springs routed through
+  `Motion.spring`, which collapses every spring to a ≤200ms fade when the
+  system Reduce Motion setting is on; scale choreography (bounce, breathing,
+  rising notes) turns off entirely under Reduce Motion.
+- **Battery:** all TimelineViews honor `AppModel.frameInterval` (30fps cap in
+  Low Power Mode); the idle ball mounts no TimelineView at all.
+- **Complex SwiftUI expressions** can hit type-checker timeouts — hoist math
+  into typed helper functions (precedent: `BreathingDots`, `RisingNotes`).
+- **Coordinate spaces:** AppKit screen space is bottom-left; the SwiftUI panel
+  space is top-left. Every conversion lives in `PillLayout` (documented there);
+  don't do ad-hoc flips.
 
 ## Technical architecture
 
-- **UI:** SwiftUI inside a borderless, non-activating `NSPanel` (`.nonactivatingPanel`, `.borderless`), window level above the menu bar (`.statusBar` + 1 or `.screenSaver`), `collectionBehavior` including `.canJoinAllSpaces`, `.stationary`, `.fullScreenAuxiliary`. Ignore mouse events outside the visible shape.
-- **Notch geometry:** read `NSScreen.safeAreaInsets` / `auxiliaryTopLeftArea` + `auxiliaryTopRightArea` to compute the notch frame and position the panel exactly.
-- **Allowed sources (v1):** only dedicated music apps drive the notch — Spotify (`com.spotify.client`) and Apple Music (`com.apple.Music`). Browser audio is ignored entirely (system now-playing can't distinguish YT Music from any other tab; browser support is a later feature).
-- **Now playing detection:** the private MediaRemote framework is restricted since macOS 15.4. Use the community approach current at build time (check how BoringNotch / MediaRemoteAdapter handle it — typically a helper process or adapter). Fallbacks: Spotify and Apple Music AppleScript APIs (`tell application "Spotify" ...`) for track metadata + playback position. Poll position sparingly; interpolate between polls with a local clock for smooth animation.
-- **Lyrics:** LRCLIB (https://lrclib.net) — free, open API returning synced .lrc. Match on track name + artist + album + duration. Cache lyrics locally (song ID → lrc) so repeat plays are offline. Handle: no lyrics found (show track title only in the wing), plain unsynced lyrics (show static line, no animation).
-- **Color extraction:** dominant color from album artwork (k-means or CIAreaAverage on downsampled art), then transform: background = hue at ~12% lightness, foreground tints derived from same hue. Cache per album.
-- **Animation:** SwiftUI springs throughout (`.spring(response:dampingFraction:)`), `matchedGeometryEffect` for the compact↔expanded morph. Target 120Hz ProMotion smoothness; avoid offscreen rendering and re-layout during animation (animate masks/opacity/transforms, not text layout).
-- **Menu bar item:** minimal NSStatusItem for settings/quit (the notch UI itself is the product; keep the status item nearly invisible).
-- **Settings window:** theme picker as expressive→minimal segmented control with a live singing preview, launch-at-login toggle, the two open-decision behaviors once decided.
+- **UI:** one full-screen transparent non-activating `NSPanel` (`.borderless +
+  .nonactivatingPanel`, level statusBar+1, `.canJoinAllSpaces/.stationary/
+  .fullScreenAuxiliary`) hosts the SwiftUI hierarchy. The pill is positioned by
+  a model-owned anchor point — drag moves the view, never the window.
+  `PassThroughHostingView.hitTest` keeps only the pill/popup shape clickable;
+  everything else passes through. Esc/click-outside dismissal via local+global
+  event monitors.
+- **Allowed sources (v1):** only Spotify (`com.spotify.client`) and Apple
+  Music (`com.apple.Music`). Browser audio is ignored entirely.
+- **Now playing:** MediaRemote adapter (community `mediaremote-adapter`
+  helper — MediaRemote is restricted since macOS 15.4) with an AppleScript
+  polling fallback. `PlaybackClock` interpolates between sparse updates;
+  `PositionPoller` re-anchors it every ~2s while playing (osascript, background
+  queue, corrects only drifts >0.3s, self-stops after repeated failures) and
+  immediately on popup open.
+- **Lyrics:** LRCLIB (https://lrclib.net) — synced .lrc matched on
+  title/artist/album/duration with title-variant cleaning (`TitleCleaner`),
+  retries, and a disk cache (repeat plays render offline/instantly). Fallbacks:
+  plain lyrics → static text; nothing → title in the pill + empty state in the
+  popup. Echo detection flags `(…)`/`[…]` lines and inline spans at parse time.
+- **Color:** dominant-hue extraction from album art (`Palette`), cached per
+  album. Revision A: the palette tints TEXT and popup content only — the glass
+  material is always neutral black.
+- **Menu bar item:** minimal NSStatusItem (Settings…/Quit only).
+- **Settings:** theme segmented control with live preview, instrumental style
+  (popup indicator), lyric timing slider (same value as the right-click
+  nudges), launch at login.
 
-## Restraint (deliberately excluded from v1)
+## Build & test
 
-No volume slider, no like/favorite, no shuffle/repeat, no lyrics search, no notchless floating-pill mode (planned v1.x), no word-by-word data editor. Every control not added makes the panel calmer.
+- `./build.sh` → build Verse.app into ./build; `./build.sh run` → build+launch;
+  `./build.sh install` → copy to /Applications; `./build.sh clean`. Requires
+  Xcode CLT + cmake (clones/builds mediaremote-adapter on first run).
+- **Tests:** no XCTest on this machine. Logic checks live in
+  `Sources/Verse/Checks/` (debug-only) and run via
+  `swift run Verse --checks` → expect `ALL CHECKS PASSED`. Add a
+  `*Checks.swift` file + register it in `Checks.swift` for any new pure logic.
+  `VerseChecks.runIfRequested()` must stay the first statement of the entry
+  point.
+- Zero compiler warnings is the bar for every commit.
 
-## Build order suggestion
+## Restraint (deliberately excluded)
 
-1. NSPanel positioned at the notch + compact wing with static text.
-2. Now-playing pipeline (metadata + position interpolation).
-3. LRCLIB fetch + cache + line sync.
-4. Theme 3 (light wipe) in compact state.
-5. Vibe mode layout + album color extraction.
-6. The matchedGeometryEffect morph.
-7. Remaining three themes (shared timing engine, four renderers).
-8. Click-to-seek, scrubber, pin, scroll-to-browse.
-9. Settings window with live preview.
+No hover-expand (click is the trigger), no notch-docked mode, no volume
+slider, no like/favorite, no shuffle/repeat, no lyrics search, no share
+cards, no BPM effects, no fifth theme, no browser sources. Every control not
+added keeps the pill calmer. (Peek hotkey was cut from 2.0 scope.)
