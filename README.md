@@ -1,103 +1,131 @@
-# Verse — lyrics in your notch
+<p align="center">
+  <img src="docs/icon.png" width="96" height="96" alt="Verse icon">
+</p>
 
-A macOS menu bar app that displays time-synced lyrics for the currently
-playing song, anchored to the MacBook notch. Invisible when idle, tiny when
-playing, beautiful when you want it. Text never moves — only light moves
-through it.
+<h1 align="center">Verse</h1>
+<p align="center"><em>Verse — lyrics in a pill.</em></p>
 
-## Installation
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple&logoColor=white" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Swift-5-orange?logo=swift&logoColor=white" alt="Swift 5">
+  <img src="https://img.shields.io/badge/license-MIT-e8b168" alt="MIT license">
+</p>
 
-The easiest way to install Verse without triggering macOS Gatekeeper warnings is via terminal:
+Verse shows time-synced lyrics for whatever's playing, in a slim, draggable
+glass pill that floats above every app — always on top, never in the way.
+Click it and it unfurls into a translucent karaoke card. Calm when idle, tiny
+when playing, beautiful when you want it. Works on every Mac (no notch
+required).
+
+**Website:** [cpt-nem0.github.io/verse](https://cpt-nem0.github.io/verse/)
+
+## Install
+
+### Homebrew
 
 ```sh
-curl -L -o Verse.zip https://github.com/cpt-nem0/verse/releases/latest/download/Verse.zip && unzip Verse.zip -d /Applications
+brew install --cask cpt-nem0/tap/verse
 ```
 
-## Build & run
+Verse is ad-hoc signed, not notarized by Apple, so Gatekeeper may still block
+the first launch. If so, either re-run with `--no-quarantine`:
 
-Requirements: macOS 14+, Xcode command line tools, `cmake` (`brew install cmake`), `git`.
+```sh
+brew install --cask --no-quarantine cpt-nem0/tap/verse
+```
+
+or clear the flag afterwards (see Manual install below).
+
+### One-line install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/cpt-nem0/verse/main/install.sh | bash
+```
+
+Downloads the latest release, installs it to `/Applications`, clears the
+quarantine flag, and launches it.
+
+### Manual
+
+Download `Verse.zip` from [Releases](https://github.com/cpt-nem0/verse/releases/latest),
+unzip it into `/Applications`, then run:
+
+```sh
+xattr -cr /Applications/Verse.app
+```
+
+This is necessary because Verse is ad-hoc signed rather than notarized by
+Apple, so macOS Gatekeeper quarantines it on download and refuses to open it
+("Verse is damaged and can't be opened") until the flag is cleared.
+
+## Features
+
+- **A ball when idle, a pill when singing.** No music → a 30pt translucent
+  ball parked wherever you left it. Music playing → a capsule that hugs the
+  current lyric line, spring-animated as it changes.
+- **Click to unfurl.** One click opens a glass karaoke card: three lyric
+  lines, click any line to seek, plus a scrubber and transport controls.
+- **Four animation themes**, expressive → minimal: Type-on, Word spotlight,
+  Light wipe (default), and Underline tracer — one setting drives both the
+  pill and the popup.
+- **Techie glass.** Translucent black material everywhere; the album's
+  dominant color tints only the lyric text and popup content, never the
+  material itself.
+- **Edge-anchored growth.** The pill remembers which screen edge you parked it
+  on and grows away from that edge as lines change width.
+- **Zero setup.** Detects whatever's playing automatically — no linking
+  accounts, no configuration.
+
+## Supported sources
+
+Spotify, Apple Music, YouTube Music (app or web), TIDAL, Deezer, Amazon
+Music, Plexamp, VOX, Swinsian — plus web players in supported browsers when
+the tab publishes real music metadata (artist and album, not just a video
+title).
+
+## How it works
+
+Lyrics come from [LRCLIB](https://lrclib.net)'s free, open catalog, matched
+on title/artist/album/duration and cached on disk so repeat plays render
+offline. Now-playing data comes from the community
+[`mediaremote-adapter`](https://github.com/ungive/mediaremote-adapter) helper
+(MediaRemote access has been restricted since macOS 15.4), with an
+AppleScript polling fallback; a local playback clock interpolates between
+updates so the animation stays smooth between polls.
+
+## Building from source
+
+Requirements: macOS 14+, Xcode command line tools, `cmake` (`brew install
+cmake`), `git`.
 
 ```sh
 chmod +x build.sh   # first time only
 ./build.sh run
 ```
 
-That's it. The build script:
+The script clones and builds `mediaremote-adapter`, builds the Swift package
+in release mode, and assembles + ad-hoc signs `build/Verse.app`. Other
+commands: `./build.sh` (build only), `./build.sh install` (copy to
+`/Applications`), `./build.sh clean`.
 
-1. clones and builds [`mediaremote-adapter`](https://github.com/ungive/mediaremote-adapter)
-   (BSD-3) — the community workaround for MediaRemote being restricted since
-   macOS 15.4: `/usr/bin/perl` is Apple-entitled to load the framework, so a
-   tiny helper streams now-playing JSON to Verse;
-2. builds the Swift package (`swift build -c release`);
-3. assembles and ad-hoc signs `build/Verse.app`.
+## Running checks
 
-On first launch macOS may ask permission for Verse to control Spotify /
-Music — that's the AppleScript fallback path and click-to-seek.
-
-## How it works
-
-- **Two states.** Compact "wings" extend the physical notch: album art on the
-  left, the current lyric line on the right (fixed width, never resizes per
-  line; long lines break into chunks that crossfade). Hover ~150ms and it
-  melts open into **vibe mode** — a karaoke panel tinted with the album art's
-  dominant color at ~12% lightness, three serif lines, click any line to seek,
-  scrubber, transport, pin. Scroll inside to browse the full lyric; it snaps
-  back after 4s.
-- **The morph.** The compact lyric line morphs into the vibe-mode current line
-  via `matchedGeometryEffect` — one shared element, not two crossfading views.
-  (Font interpolation sans→serif is a crossfade layered inside the shared
-  frame; SwiftUI can't tween typefaces.)
-- **Four themes**, one setting, both states, ordered expressive → minimal:
-  **Type-on** (words rise in as sung, layout pre-fixed so nothing shifts),
-  **Word spotlight** (one bright word at a time, slight pop),
-  **Light wipe** (default — brightness wave sweeps the line via an animated
-  gradient mask), **Underline tracer** (static text, sliding hairline in the
-  accent color).
-- **Timestamp fallback.** LRCLIB is usually line-level only; word timings are
-  synthesized across each line's duration, weighted by word length, so every
-  theme always works. Real word-level data snaps to word boundaries when present.
-- **Now playing.** MediaRemote adapter (system-wide, any player) with an
-  AppleScript fallback for Spotify / Apple Music. Position is polled sparsely
-  and interpolated with a local monotonic clock for 120Hz-smooth animation.
-- **Lyrics.** [LRCLIB](https://lrclib.net) matched on track + artist + album +
-  duration, cached in `~/Library/Application Support/Verse/lyrics` so repeat
-  plays are offline. No synced lyrics → track title in the wing; unsynced
-  plain lyrics → static text in vibe mode; instrumentals → breathing dots.
-
-## Project layout
-
-```
-Sources/Verse/
-  VerseApp.swift              entry point + app delegate
-  AppModel.swift              central state machine + settings
-  NowPlaying/                 adapter provider, AppleScript fallback,
-                              coordinator, interpolating clock
-  Lyrics/                     LRCLIB client + cache, LRC parser (line- and
-                              word-level), timeline engine, wing chunker
-  Color/Palette.swift         dominant-color extraction → derived palette
-  UI/                         notch panel + pass-through hit testing,
-                              compact wings, vibe mode, 4 theme renderers
-  Settings/                   settings window with live singing preview
-```
-
-## FAQ
-
-**Q: I get a message saying "Verse is damaged and can't be opened" when trying to run the app.**
-
-A: This happens because macOS Gatekeeper quarantines apps downloaded from the internet that are ad-hoc signed. To fix this, you need to remove the quarantine flag using your terminal:
+There's no XCTest target on this project; pure logic is covered by
+self-contained checks:
 
 ```sh
-# Replace this path with wherever your Verse.app is located
-xattr -cr /Applications/Verse.app
+swift run Verse --checks
 ```
 
-## Notes
+Expect `ALL CHECKS PASSED`.
 
-- The notch panel is a borderless non-activating `NSPanel` above the menu
-  bar, joined to all Spaces including fullscreen. Clicks pass through
-  everywhere except the visible shape.
-- Pinned mode auto-collapses when a fullscreen space becomes frontmost.
-- Deliberately excluded from v1 (restraint): volume, like/favorite,
-  shuffle/repeat, lyrics search, notchless floating-pill mode, word-data editor.
-- No notch? It still runs, using an island-shaped fallback sized off the
-  menu bar (the polished notchless mode is planned for v1.x).
+## Credits
+
+- Lyrics from [LRCLIB](https://lrclib.net) — a free, open, crowd-sourced
+  synced-lyrics database.
+- Now-playing access via [`mediaremote-adapter`](https://github.com/ungive/mediaremote-adapter)
+  by [ungive](https://github.com/ungive) (BSD-3).
+
+## License
+
+MIT — see [LICENSE](LICENSE).

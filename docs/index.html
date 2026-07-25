@@ -560,6 +560,92 @@
         margin-top: 4px;
       }
 
+      /* ---------- Terminal install block ---------- */
+
+      .terminal-install {
+        margin: 22px auto 0;
+        max-width: 480px;
+        text-align: left;
+        background: rgba(255, 255, 255, 0.025);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 16px;
+      }
+
+      .terminal-install .terminal-label {
+        font-size: 11.5px;
+        color: var(--text-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 10px;
+      }
+
+      .terminal-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 9px 10px;
+      }
+
+      .terminal-row + .terminal-row {
+        margin-top: 8px;
+      }
+
+      .terminal-row code {
+        flex: 1 1 auto;
+        overflow-x: auto;
+        white-space: pre;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12.5px;
+        color: var(--text-dim);
+        scrollbar-width: thin;
+      }
+
+      .terminal-row code .prompt {
+        color: var(--accent);
+        user-select: none;
+      }
+
+      .terminal-row code::-webkit-scrollbar {
+        height: 4px;
+      }
+
+      .terminal-row code::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 4px;
+      }
+
+      .copy-btn {
+        flex: none;
+        appearance: none;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text-dim);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        border-radius: 6px;
+        padding: 5px 9px;
+        cursor: pointer;
+        transition:
+          border-color 0.15s ease,
+          color 0.15s ease;
+      }
+
+      .copy-btn:hover {
+        color: var(--accent);
+        border-color: var(--accent-soft);
+      }
+
+      .copy-btn.copied {
+        color: var(--accent);
+        border-color: var(--accent-soft);
+      }
+
       /* ---------- How it works strip ---------- */
 
       .strip {
@@ -784,6 +870,18 @@
         .blob {
           filter: blur(70px);
         }
+        .terminal-install {
+          max-width: 100%;
+        }
+        .terminal-row {
+          flex-wrap: wrap;
+        }
+        .terminal-row code {
+          flex-basis: 100%;
+        }
+        .copy-btn {
+          margin-left: auto;
+        }
       }
     </style>
   </head>
@@ -869,8 +967,34 @@
               >Release notes</a
             >
             <div class="gatekeeper-note">
-              Ad-hoc signed — on first launch, right-click the app and choose
-              "Open".
+              Ad-hoc signed — right-click → Open on first launch, or use a
+              terminal install below for a smoother path.
+            </div>
+          </div>
+
+          <div class="terminal-install">
+            <div class="terminal-label">
+              or install from the terminal (skips the Gatekeeper warning)
+            </div>
+            <div class="terminal-row">
+              <code><span class="prompt">$</span> brew install --cask cpt-nem0/tap/verse</code>
+              <button
+                class="copy-btn"
+                type="button"
+                data-copy="brew install --cask cpt-nem0/tap/verse"
+              >
+                Copy
+              </button>
+            </div>
+            <div class="terminal-row">
+              <code><span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/cpt-nem0/verse/main/install.sh | bash</code>
+              <button
+                class="copy-btn"
+                type="button"
+                data-copy="curl -fsSL https://raw.githubusercontent.com/cpt-nem0/verse/main/install.sh | bash"
+              >
+                Copy
+              </button>
             </div>
           </div>
         </div>
@@ -978,6 +1102,27 @@
             lyric.textContent = lines[i];
           });
         }
+
+        /* --- copy-to-clipboard for terminal install commands --- */
+        document.querySelectorAll(".copy-btn").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var text = btn.getAttribute("data-copy");
+            var done = function () {
+              var original = btn.textContent;
+              btn.textContent = "Copied";
+              btn.classList.add("copied");
+              setTimeout(function () {
+                btn.textContent = original;
+                btn.classList.remove("copied");
+              }, 1600);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(done, done);
+            } else {
+              done();
+            }
+          });
+        });
 
         /* --- scroll reveal --- */
         if (!reduced && "IntersectionObserver" in window) {
