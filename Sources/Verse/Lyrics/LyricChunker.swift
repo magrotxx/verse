@@ -8,12 +8,14 @@ enum LyricChunker {
     static func chunks(
         for timeline: LyricsTimeline,
         maxWidth: CGFloat,
-        font: NSFont
+        font: NSFont,
+        italicFont: NSFont? = nil
     ) -> [LyricChunk] {
         var chunks: [LyricChunk] = []
         for line in timeline.lines {
             guard !line.isEmpty else { continue }
-            let groups = splitWords(line.words, maxWidth: maxWidth, font: font)
+            let groups = splitWords(
+                line.words, maxWidth: maxWidth, font: font, italicFont: italicFont ?? font)
             for (ci, group) in groups.enumerated() {
                 guard let first = group.first, let last = group.last else { continue }
                 // Chunk window: from its first word's start to the next chunk's
@@ -36,17 +38,34 @@ enum LyricChunker {
         (text as NSString).size(withAttributes: [.font: font]).width
     }
 
+    /// Width of a word run AS RENDERED: regular words in `font`, ad-lib
+    /// (isEcho) words in `italicFont`, separated by regular-font spaces.
+    /// Measuring the mixed reality is what keeps near-budget merged lines
+    /// ("lyric (aaah ooh)") from ellipsizing — an italic run is wider than
+    /// the same text measured regular (the "Pool House" truncation bug).
+    static func width(of words: [WordTiming], font: NSFont, italicFont: NSFont) -> CGFloat {
+        guard !words.isEmpty else { return 0 }
+        let space = width(of: " ", font: font)
+        var total = space * CGFloat(words.count - 1)
+        for w in words {
+            total += width(of: w.text, font: w.isEcho ? italicFont : font)
+        }
+        return total
+    }
+
     private static func splitWords(
         _ words: [WordTiming],
         maxWidth: CGFloat,
-        font: NSFont
+        font: NSFont,
+        italicFont: NSFont
     ) -> [[WordTiming]] {
         guard !words.isEmpty else { return [] }
         var groups: [[WordTiming]] = []
         var current: [WordTiming] = []
         for word in words {
-            let candidate = (current.map(\.text) + [word.text]).joined(separator: " ")
-            if !current.isEmpty && width(of: candidate, font: font) > maxWidth {
+            let candidate = current + [word]
+            if !current.isEmpty,
+               width(of: candidate, font: font, italicFont: italicFont) > maxWidth {
                 groups.append(current)
                 current = [word]
             } else {

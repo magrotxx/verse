@@ -294,11 +294,13 @@ final class AppModel: ObservableObject {
         case .title:
             target = fittedPillWidth(text: pillTitleText, font: pillFont)
         case .chunk(let chunk):
-            // Italic ad-lib runs are wider than the regular font — measure
-            // the whole chunk italic when any are present (slight
-            // over-measure is safe; under-measure truncates).
-            let font = chunk.words.contains(where: \.isEcho) ? pillItalicFont : pillFont
-            target = fittedPillWidth(text: chunk.text, font: font)
+            // Exact as-rendered width: regular words in the pill font,
+            // ad-lib words in the italic variant.
+            target = PillLayout.pillWidth(
+                forTextWidth: LyricChunker.width(
+                    of: chunk.words, font: pillFont, italicFont: pillItalicFont),
+                maxWidth: pillMaxWidth
+            )
         case .echo(let chunk):
             target = fittedPillWidth(text: chunk.text, font: echoFont)
         case .blank:
@@ -416,13 +418,14 @@ final class AppModel: ObservableObject {
             guard !Task.isCancelled, self.currentTrackKey == key else { return }
             self.content = result
             if case .synced(let timeline) = result {
-                // Small safety margin: merged ad-lib runs render italic
-                // (slightly wider than the regular font the chunker measures
-                // with) — without headroom, edge chunks truncate.
+                // The chunker measures each word in the font it will render
+                // in (regular vs italic ad-libs), so splits are exact; keep a
+                // small margin for rounding only.
                 self.compactChunks = LyricChunker.chunks(
                     for: timeline,
-                    maxWidth: self.pillTextWidth - 10,
-                    font: self.pillFont
+                    maxWidth: self.pillTextWidth - 4,
+                    font: self.pillFont,
+                    italicFont: self.pillItalicFont
                 )
             } else {
                 self.compactChunks = []
