@@ -5,4 +5,5 @@ vendor/
 *.xcodeproj
 .swiftpm/
 local_docs/
-Verse.zipbrag-output*/
+Verse.zip
+brag-output*/
