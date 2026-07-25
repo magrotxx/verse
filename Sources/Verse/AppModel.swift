@@ -294,11 +294,14 @@ final class AppModel: ObservableObject {
         case .title:
             target = fittedPillWidth(text: pillTitleText, font: pillFont)
         case .chunk(let chunk):
-            // Exact as-rendered width: regular words in the pill font,
-            // ad-lib words in the italic variant.
+            // As-rendered width (regular vs italic per word) PLUS layout
+            // slack: SwiftUI lays text out on pixel boundaries, so a width
+            // even 0.5pt under the measurement triggers "…" truncation that
+            // eats whole characters (the "Pool House" bug — measured 269.34,
+            // laid out 270.0).
             target = PillLayout.pillWidth(
                 forTextWidth: LyricChunker.width(
-                    of: chunk.words, font: pillFont, italicFont: pillItalicFont),
+                    of: chunk.words, font: pillFont, italicFont: pillItalicFont) + Self.textLayoutSlack,
                 maxWidth: pillMaxWidth
             )
         case .echo(let chunk):
@@ -315,9 +318,13 @@ final class AppModel: ObservableObject {
         clampPillAnchor()   // a wider pill may need nudging off an edge
     }
 
+    /// Headroom between NSFont measurement and SwiftUI's pixel-aligned layout
+    /// — without it, sub-point rounding triggers ellipsis truncation.
+    static let textLayoutSlack: CGFloat = 6
+
     private func fittedPillWidth(text: String, font: NSFont) -> CGFloat {
         PillLayout.pillWidth(
-            forTextWidth: LyricChunker.width(of: text, font: font),
+            forTextWidth: LyricChunker.width(of: text, font: font) + Self.textLayoutSlack,
             maxWidth: pillMaxWidth
         )
     }
