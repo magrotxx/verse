@@ -51,6 +51,17 @@ struct SettingsView: View {
                 }
 
                 HStack {
+                    Text("Lyrics size")
+                    Spacer()
+                    Slider(value: $model.lyricFontSize, in: 12...30, step: 1)
+                        .frame(width: 150)
+                    Text("\(Int(model.lyricFontSize)) pt")
+                        .font(.system(size: 10).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, alignment: .trailing)
+                }
+
+                HStack {
                     Text("Transparency")
                     Spacer()
                     Slider(value: $model.pillOpacity, in: 0.15...0.85, step: 0.05)

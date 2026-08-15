@@ -10,9 +10,9 @@ struct LyricRenderStyle {
 
     /// Compact glass-pill line: ~13pt, palette-tinted (bright on dim), same four
     /// theme animations as everywhere else.
-    static func pill(_ palette: Palette) -> LyricRenderStyle {
+    static func pill(_ palette: Palette, size: CGFloat) -> LyricRenderStyle {
         LyricRenderStyle(
-            font: .system(size: 13, weight: .medium),
+            font: .system(size: size, weight: .medium),
             bright: palette.bright,
             dim: palette.bright.opacity(0.30),
             accent: LyricLineRenderer.brandAmber,

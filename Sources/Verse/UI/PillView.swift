@@ -145,7 +145,7 @@ struct PillView: View {
 
     private var titleView: some View {
         Text(model.pillTitleText)
-            .font(.system(size: 13, weight: .medium))
+            .font(.system(size: CGFloat(model.lyricFontSize), weight: .medium))
             .foregroundStyle(model.palette.bright.opacity(0.6))
             .lineLimit(1)
             .truncationMode(.tail)
@@ -156,7 +156,7 @@ struct PillView: View {
         LyricLineRenderer(
             words: chunk.words, text: chunk.text,
             start: chunk.start, end: chunk.end,
-            theme: model.theme, style: .pill(model.palette), t: t
+            theme: model.theme, style: .pill(model.palette, size: CGFloat(model.lyricFontSize)), t: t
         )
         .opacity(chunkFade(chunk))
         .padding(.horizontal, 16)
@@ -166,7 +166,7 @@ struct PillView: View {
     /// no theme animation — just a time-fade so it drifts in and out softly.
     private func echoView(_ chunk: LyricChunk) -> some View {
         Text(chunk.text)
-            .font(.system(size: 13 * 0.75, weight: .regular, design: .serif).italic())
+            .font(.system(size: CGFloat(model.lyricFontSize) * 0.75, weight: .regular, design: .serif).italic())
             .foregroundStyle(model.palette.bright.opacity(0.55))
             .lineLimit(1)
             .truncationMode(.tail)

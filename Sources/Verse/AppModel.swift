@@ -71,6 +71,10 @@ final class AppModel: ObservableObject {
     @Published var pillOpacity: Double {
         didSet { UserDefaults.standard.set(pillOpacity, forKey: "verse.pillOpacity") }
     }
+
+    @Published var lyricFontSize: Double {
+        didSet { UserDefaults.standard.set(lyricFontSize, forKey: "verse.lyricFontSize") }
+    }
     /// Web music players in browsers (YT Music web…) — accepted only when the
     /// tab publishes music-shaped metadata (artist AND album). The coordinator
     /// reads the persisted value directly.
@@ -82,7 +86,9 @@ final class AppModel: ObservableObject {
     /// Font used to MEASURE pill text (chunks, titles) — must match the pill's
     /// lyric render size (`LyricRenderStyle.pill`, 13pt medium) or the dynamic
     /// width would over/underflow.
-    let pillFont = NSFont.systemFont(ofSize: 13, weight: .medium)
+    var pillFont: NSFont {
+        NSFont.systemFont(ofSize: lyricFontSize, weight: .medium)
+    }
 
     /// Measurement font for echo (bracketed) lines: serif italic at 75% of 13pt,
     /// mirroring `PillView`'s echo styling.
@@ -203,6 +209,7 @@ final class AppModel: ObservableObject {
             rawValue: defaults.string(forKey: "verse.instrumental") ?? "") ?? .breathingDots
         syncOffset = defaults.double(forKey: "verse.syncOffset")
         pillOpacity = defaults.object(forKey: "verse.pillOpacity") as? Double ?? 0.35
+        lyricFontSize = defaults.object(forKey: "verse.lyricFontSize") as? Double ?? 18.0
         webPlayers = defaults.object(forKey: "verse.webPlayers") as? Bool ?? true
 
         // Restore the saved anchor ("mode,x,y"). didSet does NOT fire for these
