@@ -1,0 +1,36 @@
+name: Build Verse Intel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show environment
+        run: |
+          uname -m
+          sw_vers
+          swift --version
+
+      - name: Build x86_64
+        run: |
+          swift build -c release --arch x86_64
+
+      - name: Package binary
+        run: |
+          mkdir -p artifact
+          cp .build/x86_64-apple-macosx/release/Verse artifact/Verse
+          file artifact/Verse
+          chmod +x artifact/Verse
+          zip -r Verse-Intel.zip artifact
+
+      - name: Upload Intel build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Verse-Intel
+          path: Verse-Intel.zip
