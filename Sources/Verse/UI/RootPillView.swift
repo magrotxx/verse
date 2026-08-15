@@ -165,7 +165,7 @@ private struct DemoPill: View {
         LyricLineRenderer(
             words: Self.demoWords, text: AppModel.demoText,
             start: 0.4, end: 4.1,
-            theme: model.theme, style: .pill(model.palette), t: loop
+            theme: model.theme, style: .pill(model.palette, size: CGFloat(model.lyricFontSize)), t: loop
         )
         .padding(.horizontal, 16)
         .frame(width: model.pillWidth, height: model.pillLayout.pillHeight)
