@@ -57,8 +57,12 @@ struct PillLayout {
     /// Revision A dynamic width: the capsule hugs the displayed text.
     /// `textWidth + 32` (16pt horizontal padding each side), never narrower
     /// than the ball, never wider than `maxWidth`.
-    static func pillWidth(forTextWidth textWidth: CGFloat, maxWidth: CGFloat) -> CGFloat {
-        min(max(textWidth + 32, ballDiameter), maxWidth)
+    static func pillWidth(
+        forTextWidth textWidth: CGFloat,
+        maxWidth: CGFloat,
+        horizontalPadding: CGFloat = 16
+    ) -> CGFloat {
+        min(max(textWidth + horizontalPadding * 2, ballDiameter), maxWidth)
     }
 
     // MARK: - Screen space → panel space

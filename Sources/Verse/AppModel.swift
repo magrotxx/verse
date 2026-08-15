@@ -73,7 +73,15 @@ final class AppModel: ObservableObject {
     }
 
     @Published var lyricFontSize: Double {
-        didSet { UserDefaults.standard.set(lyricFontSize, forKey: "verse.lyricFontSize") }
+        didSet {
+            UserDefaults.standard.set(lyricFontSize, forKey: "verse.lyricFontSize")
+            pillLayout.pillHeight = max(30, CGFloat(lyricFontSize) + 17)
+            refreshPillWidth()
+        }
+    }
+
+    var pillHorizontalPadding: CGFloat {
+        max(16, CGFloat(lyricFontSize) * 1.05)
     }
     /// Web music players in browsers (YT Music web…) — accepted only when the
     /// tab publishes music-shaped metadata (artist AND album). The coordinator
@@ -117,7 +125,7 @@ final class AppModel: ObservableObject {
     var pillTextWidth: CGFloat { pillMaxWidth - 32 }
 
     /// Pure geometry helpers (pill/popup size, clamping, coordinate flips).
-    let pillLayout = PillLayout()
+    var pillLayout = PillLayout()
 
     /// The pill's ANCHOR point in SwiftUI panel space: x of the anchored edge
     /// (per `pillAnchorMode`) + the pill's TOP y. Revision A: as the width
@@ -211,6 +219,7 @@ final class AppModel: ObservableObject {
         pillOpacity = defaults.object(forKey: "verse.pillOpacity") as? Double ?? 0.35
         lyricFontSize = defaults.object(forKey: "verse.lyricFontSize") as? Double ?? 18.0
         webPlayers = defaults.object(forKey: "verse.webPlayers") as? Bool ?? true
+        pillLayout.pillHeight = max(30, CGFloat(lyricFontSize) + 17)
 
         // Restore the saved anchor ("mode,x,y"). didSet does NOT fire for these
         // initial assignments, so `hasStoredPillAnchor` is set by hand — the
@@ -309,7 +318,8 @@ final class AppModel: ObservableObject {
             target = PillLayout.pillWidth(
                 forTextWidth: LyricChunker.width(
                     of: chunk.words, font: pillFont, italicFont: pillItalicFont) + Self.textLayoutSlack,
-                maxWidth: pillMaxWidth
+                maxWidth: pillMaxWidth,
+                horizontalPadding: pillHorizontalPadding
             )
         case .echo(let chunk):
             target = fittedPillWidth(text: chunk.text, font: echoFont)
@@ -332,7 +342,8 @@ final class AppModel: ObservableObject {
     private func fittedPillWidth(text: String, font: NSFont) -> CGFloat {
         PillLayout.pillWidth(
             forTextWidth: LyricChunker.width(of: text, font: font) + Self.textLayoutSlack,
-            maxWidth: pillMaxWidth
+            maxWidth: pillMaxWidth,
+            horizontalPadding: pillHorizontalPadding
         )
     }
 

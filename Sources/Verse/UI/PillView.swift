@@ -149,7 +149,7 @@ struct PillView: View {
             .foregroundStyle(model.palette.bright.opacity(0.6))
             .lineLimit(1)
             .truncationMode(.tail)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, model.pillHorizontalPadding)
     }
 
     private func chunkView(_ chunk: LyricChunk) -> some View {
@@ -159,7 +159,7 @@ struct PillView: View {
             theme: model.theme, style: .pill(model.palette, size: CGFloat(model.lyricFontSize)), t: t
         )
         .opacity(chunkFade(chunk))
-        .padding(.horizontal, 16)
+        .padding(.horizontal, model.pillHorizontalPadding)
     }
 
     /// Echo (bracketed ad-lib) line: italic serif at 75% size / 55% brightness,
@@ -171,7 +171,7 @@ struct PillView: View {
             .lineLimit(1)
             .truncationMode(.tail)
             .opacity(chunkFade(chunk))
-            .padding(.horizontal, 16)
+            .padding(.horizontal, model.pillHorizontalPadding)
     }
 
     // MARK: - Time-driven crossfade
