@@ -16,21 +16,23 @@ jobs:
           uname -m
           sw_vers
           swift --version
+          cmake --version
 
-      - name: Build x86_64
+      - name: Build Intel Verse app
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "13.0"
+          CMAKE_OSX_DEPLOYMENT_TARGET: "13.0"
         run: |
-          swift build -c release --arch x86_64
+          chmod +x build.sh
+          ./build.sh
+          file build/Verse.app/Contents/MacOS/Verse
 
-      - name: Package binary
+      - name: Package Verse.app
         run: |
-          mkdir -p artifact
-          cp .build/x86_64-apple-macosx/release/Verse artifact/Verse
-          file artifact/Verse
-          chmod +x artifact/Verse
-          zip -r Verse-Intel.zip artifact
+          ditto -c -k --sequesterRsrc --keepParent build/Verse.app Verse-Intel.app.zip
 
-      - name: Upload Intel build
+      - name: Upload Intel app
         uses: actions/upload-artifact@v4
         with:
-          name: Verse-Intel
-          path: Verse-Intel.zip
+          name: Verse-Intel-App
+          path: Verse-Intel.app.zip
