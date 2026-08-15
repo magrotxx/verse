@@ -95,7 +95,8 @@ struct PillView: View {
             .animation(Motion.spring(0.45, 0.92), value: model.pillWidth)
             // Width recompute is a per-line event: fires when the displayed
             // chunk/state changes, never per frame.
-            .onChange(of: widthKey(display), initial: true) { model.refreshPillWidth() }
+            .onChange(of: widthKey(display)) { _ in model.refreshPillWidth() }
+            .onAppear { model.refreshPillWidth() }
     }
 
     private func currentDisplay() -> PillDisplay {

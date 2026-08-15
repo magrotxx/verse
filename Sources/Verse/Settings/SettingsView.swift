@@ -89,7 +89,7 @@ struct SettingsView: View {
                 Toggle("Launch Verse at login", isOn: $launchAtLogin)
                     .toggleStyle(.switch)
                     .controlSize(.small)
-                    .onChange(of: launchAtLogin) { _, enabled in
+                    .onChange(of: launchAtLogin) { enabled in
                         do {
                             if enabled { try SMAppService.mainApp.register() }
                             else { try SMAppService.mainApp.unregister() }
