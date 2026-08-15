@@ -219,7 +219,6 @@ final class AppModel: ObservableObject {
         pillOpacity = defaults.object(forKey: "verse.pillOpacity") as? Double ?? 0.35
         lyricFontSize = defaults.object(forKey: "verse.lyricFontSize") as? Double ?? 18.0
         webPlayers = defaults.object(forKey: "verse.webPlayers") as? Bool ?? true
-        pillLayout.pillHeight = max(30, CGFloat(lyricFontSize) + 17)
 
         // Restore the saved anchor ("mode,x,y"). didSet does NOT fire for these
         // initial assignments, so `hasStoredPillAnchor` is set by hand — the
@@ -228,6 +227,9 @@ final class AppModel: ObservableObject {
         var restoredAnchor = CGPoint.zero
         var restoredMode = PillAnchorMode.center
         var restored = false
+        // Apply saved lyric size after the model's stored properties begin initialization.
+        let savedLyricFontSize = lyricFontSize
+
         if let saved = defaults.string(forKey: "verse.pillAnchor") {
             let parts = saved.split(separator: ",").map(String.init)
             if parts.count == 3,
@@ -356,6 +358,7 @@ final class AppModel: ObservableObject {
         coordinator.start()
         observeFullscreen()
         observeMotionAndPower()
+        pillLayout.pillHeight = max(30, CGFloat(savedLyricFontSize) + 17)
         refreshPillWidth()   // demo width on first run; ball width otherwise
     }
 
