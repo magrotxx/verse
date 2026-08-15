@@ -227,9 +227,6 @@ final class AppModel: ObservableObject {
         var restoredAnchor = CGPoint.zero
         var restoredMode = PillAnchorMode.center
         var restored = false
-        // Apply saved lyric size after the model's stored properties begin initialization.
-        let savedLyricFontSize = lyricFontSize
-
         if let saved = defaults.string(forKey: "verse.pillAnchor") {
             let parts = saved.split(separator: ",").map(String.init)
             if parts.count == 3,
@@ -358,7 +355,7 @@ final class AppModel: ObservableObject {
         coordinator.start()
         observeFullscreen()
         observeMotionAndPower()
-        pillLayout.pillHeight = max(30, CGFloat(savedLyricFontSize) + 17)
+        pillLayout.pillHeight = max(30, CGFloat(lyricFontSize) + 17)
         refreshPillWidth()   // demo width on first run; ball width otherwise
     }
 
